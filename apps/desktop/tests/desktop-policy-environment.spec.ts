@@ -47,9 +47,9 @@ it('rejects login origins in production', () => {
     .toThrow('must not configure allowedAuthOrigins')
 })
 
-it.each([{ unsigned: true }, { prepareOnly: true }, {}])('requires policy outside local macOS builds in %j', (options) => {
+it.each([{ unsigned: true }, { prepareOnly: true }, {}])('requires policy for every signed or preparation-only mode in %j', (options) => {
   for (const platform of ['win32', 'darwin'] as const) {
-    if (platform === 'darwin' && options.unsigned) {
+    if (options.unsigned) {
       expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_APP_ID: 'com.example.test' }, { platform, arch: 'x64' }, options) })
         .not.toThrow()
       continue

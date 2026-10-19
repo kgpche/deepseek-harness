@@ -8,17 +8,18 @@ export interface DesktopElectronBuilderConfig {
   readonly directories: {
     readonly output: string
   }
-  readonly files: readonly [
-    ...string[],
-    { readonly from: string, readonly to: 'dsh', readonly filter: readonly ['**/*'] },
-    { readonly from: string, readonly to: 'dsh/node_modules', readonly filter: readonly ['**/*'] },
-  ]
+  // The dsh archive members are absent on Linux, which ships the tree as physical resources instead.
+  readonly files: readonly (string
+    | { readonly from: string, readonly to: 'dsh', readonly filter: readonly ['**/*'] }
+    | { readonly from: string, readonly to: 'dsh/node_modules', readonly filter: readonly ['**/*'] })[]
   readonly extraMetadata: { readonly dshDesktopAppId: string }
   readonly asarUnpack: readonly string[]
   readonly extraResources: readonly [
     { readonly from: string, readonly to: 'runtime' },
-    { readonly from: string, readonly to: 'icon.png' },
-    ...{ readonly from: string, readonly to: 'tray.ico' }[],
+    ...({ readonly from: string, readonly to: 'dsh' }
+      | { readonly from: string, readonly to: 'dsh/node_modules' }
+      | { readonly from: string, readonly to: 'icon.png' }
+      | { readonly from: string, readonly to: 'tray.ico' })[],
   ]
   readonly mac: {
     readonly extendInfo: { readonly NSMicrophoneUsageDescription: string }
@@ -41,6 +42,15 @@ export interface DesktopElectronBuilderConfig {
       readonly sign: ((configuration: { path: string, hash: string, isNest: boolean }) => Promise<void>) | undefined
       readonly signingHashAlgorithms: readonly string[]
     }
+  }
+  readonly linux: {
+    readonly icon: string
+    readonly category: 'Development'
+    readonly executableName: 'deepseek-harness'
+    readonly target: readonly ['AppImage', 'deb']
+  }
+  readonly deb: {
+    readonly maintainer: string
   }
   readonly nsis: {
     readonly include: string

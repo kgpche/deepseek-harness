@@ -19,6 +19,7 @@ Build Desktop installers locally or through Windows or macOS Actions, choose dep
 - [macOS self-hosted packaging](#macos-actions)
 - [Unsigned Windows test installer](#unsigned-windows-test-installer)
 - [Local macOS DMG without release signing](#local-macos-dmg-without-release-signing)
+- [Unsigned Linux local package](#unsigned-linux-package)
 - [macOS release signing and diagnostics](#macos-release-signing)
 - [Directory builds and preparation](#directory-and-preparation)
 - [Local Official bundles from a loopback registry](#local-official-bundles-from-a-loopback-registry)
@@ -93,7 +94,7 @@ pnpm run package:desktop:mac:x64
 pnpm run package:desktop:win:x64
 ```
 
-The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux is not a supported Desktop release target.
+The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux x64 builds are unsigned-only local packages; see [Unsigned Linux local package](#unsigned-linux-package).
 
 Both release and local unsigned macOS DMGs use LZMA compression (`dmg.format: 'ULMO'`) in [the electron-builder configuration](../scripts/electron-builder-config.mjs). A [build-time patch](../../../patches/app-builder-lib@26.17.0.patch) adds this format to the pinned builder's validation and TypeScript declarations.
 
@@ -144,7 +145,7 @@ On Windows x64, use the complete unsigned packaging command for local installati
 pnpm run package:desktop:win:x64:unsigned
 ```
 
-The command reads `.env.windows` and requires `DSH_DESKTOP_APP_ID` and the [mandatory-update policy settings](../README.md#mandatory-update-policy), including a real HTTPS service origin. The local run and CI use Node 24; the remaining tools are the root `packageManager` version of pnpm, Git, PowerShell, tar, Python, Visual C++ Build Tools and a Windows SDK. Set `PYTHON` when Python is absent from `PATH`. It writes the installer to `.desktop-build/targets/win-x64/unsigned-artifacts/`, omits ordinary automatic-update configuration, strips signing credentials, and creates no release completion record. EV and upload credentials are unnecessary. Signed packaging and upload retain their release requirements.
+The command reads `.env.windows` and requires `DSH_DESKTOP_APP_ID`. Unsigned builds embed no mandatory-update policy, so the policy settings are unnecessary; the platform file may still declare them. The local run and CI use Node 24; the remaining tools are the root `packageManager` version of pnpm, Git, PowerShell, tar, Python, Visual C++ Build Tools and a Windows SDK. Set `PYTHON` when Python is absent from `PATH`. It writes the installer to `.desktop-build/targets/win-x64/unsigned-artifacts/`, omits ordinary automatic-update configuration, strips signing credentials, and creates no release completion record. EV and upload credentials are unnecessary. Signed packaging and upload retain their release requirements.
 
 Run `pnpm install --frozen-lockfile`, then `pnpm run package:desktop:win:x64:unsigned --check` to validate configuration and tooling before the full command above. Packaging performs its own complete build and isolated runtime smoke without an online model. Stage logs remain under `.desktop-build/packaging-runs/`; a successful build alone does not qualify the installer. Dependency installation and runtime preparation need access to npm, GitHub release assets and nodejs.org; use the existing registry and proxy configuration when the network requires it. Caches and tool locations belong to the build machine, not tracked personal paths.
 
@@ -162,6 +163,18 @@ pnpm run package:desktop:mac:x64:unsigned
 Add `--check` to validate local configuration and tools without building, or `--dir` to stop at the unpacked application. The DMG is `apps/desktop/.desktop-build/targets/<target>/unsigned-artifacts/deepseek-harness-<version>-mac-<arch>-unsigned.dmg`. After all checks pass, the command prints `DMG:` followed by its absolute path. Open it and copy the application to a local test directory.
 
 These commands ignore `.env.macos` and inherited release settings, use `com.deepseek.harness` as the app ID, and omit automatic-update and mandatory-update configuration. Build tools, standard network proxies, and `DSH_DESKTOP_NPM_REGISTRY` remain available from the shell. They skip Developer ID signing, Apple notarization, temporary signing keychains, and notarization proxy changes. Electron receives a local ad-hoc signature without certificates so the modified executable can run; the DMG is unsigned. Both preparation and the assembled application still run runtime integrity and smoke checks. Local builds omit update feeds, ZIPs, and release completion records, and the upload commands cannot publish them. macOS may require approval in System Settings → Privacy & Security to open an unnotarized application.
+
+<a id="unsigned-linux-package"></a>
+
+## Unsigned Linux local package
+
+On Linux x64, build a local `.deb` together with an AppImage after `pnpm install`:
+
+```sh
+pnpm run package:desktop:linux:x64:unsigned
+```
+
+No `.env` file or signing configuration is required; the command uses the same local defaults as unsigned macOS builds, including the `com.deepseek.harness` app ID. Signed Linux builds, release records, and update feeds do not exist for this target, so the packaging entry rejects it without `--unsigned`. The artifacts land in `apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/` as `deepseek-harness-<version>-linux-amd64-unsigned.deb` and `deepseek-harness-<version>-linux-x86_64-unsigned.AppImage`, using the distribution architecture names; a successful run prints `DEB:` with the absolute path. Install the package with `sudo apt install <path-to-deb>`, or inspect its control fields and file list with `dpkg-deb -I` and `dpkg-deb -c`. Packaging needs access to npm, GitHub release assets, and nodejs.org to fetch Electron and the primary runtime; preparation and the assembled application still run runtime integrity and smoke checks. The Linux application runs the bundled dsh tree under the standalone Node from `resources/runtime/primary-runtime` instead of Electron's Node mode, because the Electron executable loads GTK-linked libraries that crash glib-linked native modules such as sharp ([electron#46323](https://github.com/electron/electron/issues/46323)); the installed Electron binary still owns the desktop shell itself.
 
 <a id="macos-release-signing"></a>
 

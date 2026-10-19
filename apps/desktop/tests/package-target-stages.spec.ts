@@ -102,6 +102,21 @@ it.each(['--unsigned', '--prepare-only'])('keeps %s hardware-free and creates no
   expect(stages.includes('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')).toBe(mode === '--unsigned')
 })
 
+it('builds the unsigned Linux package without signing stages or a release record', async () => {
+  const { run, stages } = supervisor()
+  await packageTarget(parseDesktopPackageInvocation(['linux-x64', '--unsigned'], 'linux', 'x64'), environment, run)
+  expect(stages[0]).toBe('run build:official')
+  expect(stages).not.toContain('preflight:windows-signing')
+  expect(stages).not.toContain('run sign:primary-runtime')
+  expect(withWindowsSigningStage).not.toHaveBeenCalled()
+  expect(stages.at(-2)).toBe('exec electron-builder --config electron-builder.config.mjs --linux --x64 --publish never')
+  expect(stages.at(-1)).toBe('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')
+  expect(run.run.mock.calls.at(-2)![3].env).toMatchObject({
+    DSH_DESKTOP_UNSIGNED: '1', DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: 'x64',
+  })
+  expect(writeFileSync).not.toHaveBeenCalled()
+})
+
 it('checks the assembled macOS runtime before notarizing and recording the release', async () => {
   const { run, stages } = supervisor()
   vi.mocked(packageMacOSArtifacts).mockImplementationOnce(async () => {

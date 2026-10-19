@@ -11,4 +11,17 @@ while [ -L "$launcher" ]; do
   esac
 done
 resources=$(CDPATH= cd -- "$(dirname -- "$launcher")/../../.." && pwd -P)
-ELECTRON_RUN_AS_NODE=1 exec "$resources/../MacOS/DeepSeek Harness" --expose-internals "$resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js" "$@"
+# Linux runs the bundled standalone Node: the Electron executable loads its GTK-linked
+# libraries even in Node mode and crashes glib-linked native modules (electron#46323),
+# and the standalone Node reads the dsh tree from its physical resources directory.
+standalone=$resources/runtime/primary-runtime/dependencies/node/bin/node
+if [ "$(uname -s)" = "Linux" ] && [ -x "$standalone" ]; then
+  exec "$standalone" --expose-internals "$resources/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js" "$@"
+fi
+# macOS bundles the executable under Contents/MacOS; Linux without the standalone runtime falls back to the installed binary.
+if [ -x "$resources/../MacOS/DeepSeek Harness" ]; then
+  application="$resources/../MacOS/DeepSeek Harness"
+else
+  application=$resources/../deepseek-harness
+fi
+ELECTRON_RUN_AS_NODE=1 exec "$application" --expose-internals "$resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js" "$@"

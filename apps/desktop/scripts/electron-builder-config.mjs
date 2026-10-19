@@ -65,7 +65,8 @@ export function createElectronBuilderConfig(
   if (skipNotarization && (unsigned || resolvedPlatform !== 'darwin')) throw new Error('Skipping notarization requires a signed macOS build')
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = resolvedPlatform === 'win32'
-  const policy = packagesMacOS && unsigned ? undefined : resolveDesktopPolicyEnvironment(env)
+  // Unsigned builds are local artifacts for every platform: they embed no mandatory-update policy.
+  const policy = unsigned ? undefined : resolveDesktopPolicyEnvironment(env)
   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
   const macOSSigning = packagesMacOS && !unsigned ? resolveMacOSSigningEnvironment(env) : undefined
   if (packagesMacOS && !unsigned && !skipNotarization) resolveMacOSNotarizationEnvironment(env)
@@ -133,6 +134,8 @@ export function createElectronBuilderConfig(
       // A falsy result tells electron-builder to omit its production node_modules collection.
       return true
     },
+    // Linux runs the dsh tree under the standalone Node, which cannot read inside an ASAR archive,
+    // so its dsh payload ships as physical resources instead of application archive members.
     files: [
       'lib/main.js',
       'lib/welcome/**/*',
@@ -145,13 +148,20 @@ export function createElectronBuilderConfig(
       'package.json',
       '!node_modules/**/*.{js,cjs,mjs,ts,cts,mts,css}.map',
       '!node_modules/**/*.tsbuildinfo',
-      { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
-      // electron-builder excludes a source directory's root node_modules.
-      { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+      ...(resolvedPlatform === 'linux' ? [] : [
+        { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
+        // electron-builder excludes a source directory's root node_modules.
+        { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+      ]),
     ],
     asarUnpack: unpack,
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
+      // electron-builder excludes a source directory's root node_modules here too.
+      ...(resolvedPlatform === 'linux' ? [
+        { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
+        { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+      ] : []),
       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
       // Windows tray bitmaps; macOS keeps the Dock and ships no menu bar icon.
       ...(packagesWindows ? [{ from: fileURLToPath(new URL('../resources/tray-windows.ico', import.meta.url)), to: 'tray.ico' }] : []),
@@ -246,8 +256,16 @@ export function createElectronBuilderConfig(
       target: ['nsis'],
     },
     linux: {
+      // Standard-size set: hicolor's index.theme ignores nonstandard icon directories such as 1104x1104.
+      icon: fileURLToPath(new URL('../resources/icon-linux', import.meta.url)),
       category: 'Development',
-      target: ['AppImage'],
+      // The deb desktop entry and /opt layout name the installed binary after this;
+      // the packaged cli/dsh launcher execs it beside the resources directory.
+      executableName: 'deepseek-harness',
+      target: ['AppImage', 'deb'],
+    },
+    deb: {
+      maintainer: 'DeepSeek Harness',
     },
     nsis: {
       installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),

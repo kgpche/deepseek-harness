@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-linux-desktop-standalone-node.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-linux-desktop-standalone-node.md
+/agent-note-run-the-bundled-dsh-tree-under-standalone-node-on-linux-desktop:
+  en: 8dbb75ad7eff2415
+  zh: 9d3829283b6b879c
+/agent-note-run-the-bundled-dsh-tree-under-standalone-node-on-linux-desktop/problem:
+  en: f3074023354f97e1
+  zh: f32ffd7b2c931f49
+/agent-note-run-the-bundled-dsh-tree-under-standalone-node-on-linux-desktop/decision:
+  en: 9e6d8f37461230c2
+  zh: b4e53950d9d4beed
+/agent-note-run-the-bundled-dsh-tree-under-standalone-node-on-linux-desktop/consequences:
+  en: 42252fc9ad2d2078
+  zh: 1c13140d6163eb87
+/agent-note-run-the-bundled-dsh-tree-under-standalone-node-on-linux-desktop/alternatives-considered:
+  en: 4833c727e470faf9
+  zh: 1a75276b8c723032

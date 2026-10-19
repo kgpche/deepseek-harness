@@ -4,6 +4,7 @@
   "version": "0.2.1-rc.2",
   "private": true,
   "license": "MIT",
+  "homepage": "https://deepseek.com/harness",
   "type": "module",
   "main": "lib/main.js",
   "scripts": {
@@ -35,6 +36,7 @@
     "package:win:x64": "tsx scripts/package-target.ts win-x64",
     "package:win:x64:unsigned": "tsx scripts/package-target.ts win-x64 --unsigned",
     "package:win:x64:dir": "tsx scripts/package-target.ts win-x64 --dir",
+    "package:linux:x64:unsigned": "tsx scripts/package-target.ts linux-x64 --unsigned",
     "upload:mac:arm64": "tsx scripts/upload-target.ts mac-arm64",
     "upload:mac:x64": "tsx scripts/upload-target.ts mac-x64",
     "upload:win:x64": "tsx scripts/upload-target.ts win-x64",

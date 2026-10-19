@@ -2,21 +2,20 @@
 
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import type { DesktopPackageTargetName } from './package-target.ts'
 import { createDesktopCos } from './desktop-cos.ts'
 import { resolveDesktopUploadConfig } from './desktop-auto-update-environment.mjs'
 import { loadDesktopPackageEnvironment } from './desktop-package-environment.mjs'
-import { createDesktopUploadPlan, type DesktopUploadPlan } from './desktop-upload-plan.ts'
+import { createDesktopUploadPlan, type DesktopUploadPlan, type DesktopUploadTargetName } from './desktop-upload-plan.ts'
 import { desktopReleaseTag, tagDesktopRelease } from './desktop-release-tag.ts'
 import { uploadDesktopRelease } from './desktop-upload-run.ts'
 
-const SUPPORTED_TARGETS = new Set<DesktopPackageTargetName>(['mac-arm64', 'mac-x64', 'win-x64'])
+const SUPPORTED_TARGETS = new Set<DesktopUploadTargetName>(['mac-arm64', 'mac-x64', 'win-x64'])
 
-function targetName(value: string): DesktopPackageTargetName {
-  if (!SUPPORTED_TARGETS.has(value as DesktopPackageTargetName)) {
+function targetName(value: string): DesktopUploadTargetName {
+  if (!SUPPORTED_TARGETS.has(value as DesktopUploadTargetName)) {
     throw new Error(`desktop upload: unsupported target ${JSON.stringify(value)}; expected ${[...SUPPORTED_TARGETS].join(', ')}`)
   }
-  return value as DesktopPackageTargetName
+  return value as DesktopUploadTargetName
 }
 
 function requiredEnvironmentValue(environment: NodeJS.ProcessEnv, name: string): string {
@@ -39,7 +38,7 @@ function requiredEnvironmentValue(environment: NodeJS.ProcessEnv, name: string):
 export function resolveCredentialUploadEnvironment(
   fileEnvironment: NodeJS.ProcessEnv, injectedEnvironment: NodeJS.ProcessEnv,
   selected: 'test' | 'production', bucket: string,
-  target: DesktopPackageTargetName,
+  target: DesktopUploadTargetName,
 ): NodeJS.ProcessEnv {
   const platform = target === 'win-x64' ? 'win32' : 'darwin'
   const arch = target === 'mac-arm64' ? 'arm64' : 'x64'

@@ -28,7 +28,8 @@ function fixture() {
   mkdirSync(dirname(electron), { recursive: true })
   if (platform === 'win32') copyFileSync(process.execPath, electron)
   else symlinkSync(process.execPath, electron)
-  const entry = join(resources, 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
+  const entryBase = join(resources, 'app.asar', 'dsh')
+  const entry = join(entryBase, 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
   mkdirSync(dirname(entry), { recursive: true })
   writeFileSync(join(dirname(entry), 'package.json'), '{"type":"module"}\n')
   writeFileSync(entry, [
@@ -59,7 +60,7 @@ function fixture() {
     child.stderr.setEncoding('utf8').on('data', (text: string) => { stderr += text })
     return { child, closed, stdout: () => stdout, stderr: () => stderr }
   }
-  return { root, command, start }
+  return { root, command, start, resources }
 }
 
 it('preserves common arguments, cwd, environment, binary input, stderr and exit status', async () => {
@@ -84,4 +85,26 @@ it.skipIf(process.platform === 'win32')('resolves chained command symlinks witho
   run.child.stdin.end()
   expect(await run.closed, run.stderr()).toBe(23)
   expect(JSON.parse(run.stdout())).toMatchObject({ args, cwd: f.root, nodeMode: '1' })
+})
+
+it.skipIf(process.platform !== 'linux')('runs the bundled standalone Node when the installation ships one', async () => {
+  const f = fixture()
+  const bin = join(f.resources, 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin')
+  mkdirSync(bin, { recursive: true })
+  symlinkSync(process.execPath, join(bin, 'node'))
+  const entry = join(f.resources, 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
+  mkdirSync(dirname(entry), { recursive: true })
+  writeFileSync(join(dirname(entry), 'package.json'), '{"type":"module"}\n')
+  writeFileSync(entry, [
+    'process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd(), nodeMode: process.env.ELECTRON_RUN_AS_NODE }))',
+    'process.exitCode = 23',
+    '',
+  ].join('\n'))
+  const run = f.start(['--version'])
+  run.child.stdin.end()
+  expect(await run.closed, run.stderr()).toBe(23)
+  // The standalone Node branch reads the physical dsh tree and sets no Electron Node mode.
+  const report = JSON.parse(run.stdout()) as Record<string, unknown>
+  expect(report).toMatchObject({ args: ['--version'], cwd: f.root })
+  expect(report).not.toHaveProperty('nodeMode')
 })
