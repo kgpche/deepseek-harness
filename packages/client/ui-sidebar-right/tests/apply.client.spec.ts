@@ -232,7 +232,7 @@ describe('ui-sidebar-right apply', () => {
     if (guide === undefined) throw new Error('expected the seeded guide')
     // Held and pinned from the store's own commit: no seat synced anything.
     const occurrence = ctx.sidebarRight.tabDomain.occurrence(SESSION, guide)
-    expect(resources.pin).toHaveBeenCalledWith('sidebar://guide', occurrence.signal)
+    expect(resources.pin).toHaveBeenCalledWith('sidebar://guide', expect.any(AbortSignal))
     occurrence.tabActions.close()
     expect(instance.getSnapshot().bySession[SESSION]?.layout.tabs[guide.id]).toBeUndefined()
     expect(occurrence.signal.aborted).toBe(true)

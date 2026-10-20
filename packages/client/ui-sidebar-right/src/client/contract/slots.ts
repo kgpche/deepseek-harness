@@ -128,6 +128,8 @@ export interface SidebarRightTabPlacement {
   readonly revealIfOpened?: boolean
   /** `true` opens in this tab's place — its pane and strip slot — and closes this tab in the same step. */
   readonly replaceTab?: boolean
+  /** `true` opens as the target pane's preview slot: the pane's existing preview tab is reused in place. */
+  readonly preview?: boolean
 }
 
 /** Page-owned operations registered for a mounted tab body. */

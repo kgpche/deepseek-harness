@@ -54,6 +54,8 @@ export interface Mounted {
   readonly face: FilesInjected
   readonly controller: AbortController
   readonly tabActions: MockedTabActions
+  /** The surface's active resource address mock, for the reveal mark. */
+  readonly activeResource: ReturnType<typeof vi.fn>
   /** Render a fresh body over the same store and face, as a tab switch remounts it. */
   readonly remount: () => RenderResult
 }
@@ -62,7 +64,8 @@ export interface Mounted {
 function harness(cwd: string | null, refreshShortcut?: ReturnType<FilesBodyProps['useTabInfo']>['tab']['refreshShortcut']) {
   const instance = createFilesStore().create()
   const script = scriptedList()
-  const face = filesFace(script.list, script.watch)(SESSION, instance.actions)
+  const activeResource = vi.fn((): string | undefined => undefined)
+  const face = filesFace(script.list, script.watch, activeResource)(SESSION, instance.actions)
   const controller = new AbortController()
   onTestFinished(async () => {
     controller.abort()
@@ -95,16 +98,22 @@ function harness(cwd: string | null, refreshShortcut?: ReturnType<FilesBodyProps
     ...face,
     t: makeTranslate(zh),
   }
-  return { instance, script, face, controller, tabActions, shared }
+  return { instance, script, face, controller, tabActions, activeResource, shared }
 }
 
 /**
  * Mount the body.
  * @param cwd - the session's working directory as `useSessions` reports it; `null` for a session without one.
  * @param refreshShortcut - effective binding advertised by the tab owner.
+ * @param activeAddress - the surface's active resource address, for the reveal mark.
  */
-export function mountBody(cwd: string | null = ROOT, refreshShortcut?: ReturnType<FilesBodyProps['useTabInfo']>['tab']['refreshShortcut']): Mounted {
+export function mountBody(
+  cwd: string | null = ROOT,
+  refreshShortcut?: ReturnType<FilesBodyProps['useTabInfo']>['tab']['refreshShortcut'],
+  activeAddress?: string,
+): Mounted {
   const { shared, ...hands } = harness(cwd, refreshShortcut)
+  hands.activeResource.mockReturnValue(activeAddress)
   const view = render(<FilesBody {...shared as unknown as FilesBodyProps} />)
   return { ...hands, view, remount: () => render(<FilesBody {...shared as unknown as FilesBodyProps} />) }
 }

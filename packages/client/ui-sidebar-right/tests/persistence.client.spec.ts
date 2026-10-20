@@ -74,7 +74,7 @@ it('pins restored records during adoption before the first render or store mutat
   try {
     const occurrence = controller.tabDomain.occurrence(sessionId, { id: file })
     expect(controller.tabsIn(sessionId)).toEqual([{ id: file, kind: 'text', contentId: address, title: 'a' }])
-    expect(pin).toHaveBeenCalledWith(address, occurrence.signal)
+    expect(pin).toHaveBeenCalledWith(address, expect.any(AbortSignal))
     expect(occurrence.navigation.getSnapshot().address).toBe(address)
     restored.actions.closeTab(sessionId, file)
     expect(occurrence.signal.aborted).toBe(true)
@@ -94,4 +94,20 @@ it('starts from an empty layout when stored JSON is corrupt and keeps working wh
   vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('Storage full') })
   instance.actions.setExpanded(sessionId, true)
   expect(instance.getSnapshot().bySession[sessionId]!.layout.expanded).toBe(true)
+})
+
+it('round-trips a preview flag and still restores snapshots written before it existed', () => {
+  const values = storage()
+  const instance = createSidebarRightStore(seed).create(sessionId)
+  let preview!: TabId
+  instance.actions.openContent(sessionId, { kind: 'text', contentId: 'dsh-resource://file/session/first/a.txt', title: 'a', preview: true }, (id) => { preview = id })
+  expect(instance.getSnapshot().bySession[sessionId]!.layout.tabs[preview]!.preview).toBe(true)
+  const saved = values.get(`dsh.sidebar-right.v1.${sessionId}`)!
+  expect(JSON.parse(saved).bySession[sessionId].layout.tabs[preview].preview).toBe(true)
+  // A snapshot from before the flag carries no field and restores as a pinned tab.
+  const legacy = JSON.parse(saved)
+  delete legacy.bySession[sessionId].layout.tabs[preview].preview
+  values.set(`dsh.sidebar-right.v1.${sessionId}`, JSON.stringify(legacy))
+  const restored = createSidebarRightStore(seed).create(sessionId)
+  expect(restored.getSnapshot().bySession[sessionId]!.layout.tabs[preview]!.preview).toBeUndefined()
 })

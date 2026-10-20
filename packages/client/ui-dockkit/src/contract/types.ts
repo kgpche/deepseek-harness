@@ -88,13 +88,16 @@ export type LayoutNode = SplitNode | PaneNode
  *
  * `kind` selects the embedder's content family and is never interpreted here.
  * `contentId` is the identity `openContent` de-duplicates against, so two tabs
- * sharing it are deliberate copies of one thing.
+ * sharing it are deliberate copies of one thing. `preview` marks the pane's
+ * single reusable slot: the next preview open replaces that tab's content in
+ * place instead of adding another chip, and the strip draws it italic.
  */
 export interface TabRecord {
   readonly id: TabId
   readonly kind: string
   readonly contentId: string
   readonly title: string
+  readonly preview?: boolean
 }
 
 /**
@@ -151,6 +154,10 @@ export type LayoutOp =
   | { readonly type: 'openTab'; readonly paneId: PaneId; readonly tab: TabRecord; readonly index: number }
   /** Destroy a tab and its content state; a floating host pane goes with it. */
   | { readonly type: 'closeTab'; readonly tabId: TabId }
+  /** Replace one tab's record in place: same id, same strip slot, new content. */
+  | { readonly type: 'retabTab'; readonly tabId: TabId; readonly next: TabRecord }
+  /** Turn a preview tab into a permanent one, or back. */
+  | { readonly type: 'setTabPreview'; readonly tabId: TabId; readonly preview: boolean }
   /** Move a tab to a different docked pane. */
   | { readonly type: 'moveTab'; readonly tabId: TabId; readonly toPaneId: PaneId; readonly index: number }
   /** Move a tab within its own pane. */

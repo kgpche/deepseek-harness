@@ -38,6 +38,7 @@ function spyIntents(): DockIntents & Record<keyof DockIntents, ReturnType<typeof
     splitPane: vi.fn(),
     addTab: vi.fn(),
     closeTab: vi.fn(),
+    doubleClickTab: vi.fn(),
     duplicateTab: vi.fn(),
     floatTab: vi.fn(),
     unfloatPane: vi.fn(),
@@ -1631,3 +1632,51 @@ describe('fileTab', () => {
     expect(fileTab(asTab('t1'), 'dsh-resource://file/session/s/x', 'x').kind).toBe('file')
   })
 })
+
+describe('preview chips', () => {
+  it('marks a preview chip and reports its double-click as an intent', () => {
+    const controller = seededController()
+    const tabId = controller.openContent({ kind: 'file', contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', preview: true })
+    controller.openContent({ kind: 'file', contentId: 'dsh-resource://file/session/s/b.txt', title: 'b.txt' })
+    const intents = spyIntents()
+    renderSurface(controller, intents)
+    const chip = document.querySelector<HTMLElement>(`[data-dockkit-tab="${tabId}"]`)!
+    expect(chip.getAttribute('data-dockkit-tab-preview')).toBe('true')
+    fireEvent.doubleClick(chip)
+    expect(intents.doubleClickTab).toHaveBeenCalledWith(tabId)
+    expect(intents.focusTab).not.toHaveBeenCalled()
+  })
+
+  it('leaves pinned chips unmarked and omits the intent while no handler is wired', () => {
+    const controller = seededController()
+    const tabId = controller.openContent({ kind: 'file', contentId: 'dsh-resource://file/session/s/b.txt', title: 'b.txt' })
+    const intents = spyIntents()
+    const { rerender } = renderSurface(controller, intents)
+    const chip = document.querySelector<HTMLElement>(`[data-dockkit-tab="${tabId}"]`)!
+    expect(chip.getAttribute('data-dockkit-tab-preview')).toBeNull()
+    // Without an embedder handler the gesture is inert, never a throw.
+    fireEvent.doubleClick(chip)
+    expect(intents.focusTab).not.toHaveBeenCalled()
+    const { doubleClickTab: _omitted, ...withoutDoubleClick } = intents
+    rerenderSurface(rerender, controller, withoutDoubleClick)
+    fireEvent.doubleClick(document.querySelector<HTMLElement>(`[data-dockkit-tab="${tabId}"]`)!)
+    expect(intents.focusTab).not.toHaveBeenCalled()
+  })
+})
+
+/** Rerender the same surface with new intents. */
+function rerenderSurface(
+  rerender: (node: React.ReactNode) => void,
+  controller: DockController,
+  intents: DockIntents,
+): void {
+  rerender(
+    <DockSurface
+      state={controller.getSnapshot().state}
+      canSplit
+      intents={intents}
+      labels={TEST_LABELS}
+      renderTab={tab => <p data-testid="body">{tab.contentId}</p>}
+    />,
+  )
+}

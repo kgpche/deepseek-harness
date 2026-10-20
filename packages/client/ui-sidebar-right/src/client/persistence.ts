@@ -11,13 +11,17 @@ const splitId = z.string().regex(/^split[1-9][0-9]*$/u)
 const tabId = z.string().regex(/^tab[1-9][0-9]*$/u)
 const nodeId = z.union([paneId, splitId])
 const rectangle = z.object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() })
+// `preview` is optional: snapshots written before the preview slot existed carry no flag.
+const tabRecord = z.object({
+  id: tabId, kind: z.string().min(1), contentId: z.string().min(1), title: z.string(), preview: z.boolean().optional(),
+})
 const node = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('pane'), id: paneId, host: z.enum(['dock', 'float']), tabs: z.array(tabId), activeTabId: tabId.optional(), rect: rectangle.optional() }),
   z.object({ kind: z.literal('split'), id: splitId, axis: z.enum(['row', 'column']), children: z.array(nodeId).min(2), sizes: z.array(z.number().positive()).min(2) }),
 ])
 const layout = z.object({
   nodes: z.record(nodeId, node),
-  tabs: z.record(tabId, z.object({ id: tabId, kind: z.string().min(1), contentId: z.string().min(1), title: z.string() })),
+  tabs: z.record(tabId, tabRecord),
   rootId: nodeId, floats: z.array(paneId), activePaneId: paneId,
   expanded: z.boolean(), mode: z.enum(['push', 'fullscreen']),
 })

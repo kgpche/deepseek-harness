@@ -50,25 +50,50 @@ function recordOf(state: LayoutState, tabId: TabId) {
 }
 
 describe('TabDomain — occurrences follow records', () => {
-  it('pins a record\'s address when it first appears, with the occurrence\'s signal', () => {
+  it('pins a record\'s address when it first appears, until the occurrence ends', () => {
     const { domain, pin, controller, current } = harness()
     const tabId = controller.openContent({ kind: 'text', contentId: 'dsh-resource://file/session/s-one/a.txt', title: 'a' })
     domain.sync(SESSION, current())
     const occurrence = domain.occurrence(SESSION, recordOf(current(), tabId))
-    expect(pin).toHaveBeenCalledWith('dsh-resource://file/session/s-one/a.txt', occurrence.signal)
+    // The pin rides its own address-scoped signal; the occurrence's lifetime still ends it.
+    expect(pin).toHaveBeenCalledWith('dsh-resource://file/session/s-one/a.txt', expect.any(AbortSignal))
+    const pinSignal = pin.mock.calls.find(([address]) => address === 'dsh-resource://file/session/s-one/a.txt')![1]
     expect(occurrence.signal.aborted).toBe(false)
+    expect(pinSignal.aborted).toBe(false)
     // Seeded records are occurrences too; the guide is pinned like anything else.
     expect(pin).toHaveBeenCalledWith('sidebar://guide', expect.any(AbortSignal))
     expect(pin).toHaveBeenCalledTimes(2)
+    controller.closeTab(tabId)
+    domain.sync(SESSION, current())
+    expect(pinSignal.aborted).toBe(true)
   })
 
-  it('pins once per occurrence, however many times the layout commits', () => {
+  it('pins once per occurrence and address, however many times the layout commits', () => {
     const { domain, pin, controller, current } = harness()
     controller.openContent({ kind: 'text', contentId: 'dsh-resource://file/session/s-one/a.txt', title: 'a' })
     domain.sync(SESSION, current())
     controller.setExpanded(true)
     domain.sync(SESSION, current())
     expect(pin).toHaveBeenCalledTimes(2)
+  })
+
+  it('moves the pin when a retab reuses the occurrence for a new address, and frees the old one', () => {
+    const { domain, pin, controller, current } = harness()
+    const tabId = controller.openContent({ kind: 'text', contentId: 'dsh-resource://file/session/s-one/a.txt', title: 'a' })
+    domain.sync(SESSION, current())
+    expect(pin).toHaveBeenCalledTimes(2)
+    // A preview slot's open settles on the tab it retabs: same TabId, new address.
+    domain.navigate(SESSION, tabId, { address: 'dsh-resource://file/session/s-one/b.txt', params: undefined })
+    expect(pin).toHaveBeenCalledTimes(3)
+    expect(pin).toHaveBeenLastCalledWith('dsh-resource://file/session/s-one/b.txt', expect.any(AbortSignal))
+    const stale = pin.mock.calls.filter(([address]) => address === 'dsh-resource://file/session/s-one/a.txt').at(-1)![1]
+    const fresh = pin.mock.calls.filter(([address]) => address === 'dsh-resource://file/session/s-one/b.txt').at(-1)![1]
+    expect(stale.aborted).toBe(true)
+    expect(fresh.aborted).toBe(false)
+    // A later commit keeps the moved pin; nothing re-pins the settled address.
+    controller.setExpanded(true)
+    domain.sync(SESSION, current())
+    expect(pin).toHaveBeenCalledTimes(3)
   })
 
   it('aborts the occurrence when its record vanishes, and builds a new one when undo restores it', () => {
@@ -119,7 +144,7 @@ describe('TabDomain — navigation', () => {
     expect(occurrence.navigation.getSnapshot()).toEqual({ address: 'dsh-resource://file/session/s-one/a.txt', params: { line: 7 }, revision: 1 })
     domain.sync(SESSION, current())
     expect(domain.occurrence(SESSION, recordOf(current(), tabId))).toBe(occurrence)
-    expect(pin).toHaveBeenCalledWith('dsh-resource://file/session/s-one/a.txt', occurrence.signal)
+    expect(pin).toHaveBeenCalledWith('dsh-resource://file/session/s-one/a.txt', expect.any(AbortSignal))
   })
 
   it('steps the revision on every navigation, params changed or not, and notifies', () => {
@@ -143,7 +168,7 @@ describe('TabDomain — navigation', () => {
     domain.sync(SESSION, current())
     const occurrence = domain.occurrence(SESSION, { id: tabId })
     expect(domain.occurrence(SESSION, { id: tabId })).toBe(occurrence)
-    expect(pin).toHaveBeenCalledWith('dsh-resource://file/session/s-one/a.txt', occurrence.signal)
+    expect(pin).toHaveBeenCalledWith('dsh-resource://file/session/s-one/a.txt', expect.any(AbortSignal))
     controller.closeTab(tabId)
     domain.sync(SESSION, current())
     expect(() => domain.occurrence(SESSION, { id: tabId })).toThrow('has no committed occurrence')

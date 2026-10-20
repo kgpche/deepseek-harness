@@ -176,3 +176,10 @@
 .titleIcon {
   flex: none;
 }
+
+/* The row of the file the viewer pane shows, the explorer's reveal mark: the
+   interactive selected fill, without stealing hover. */
+.rowActive,
+.rowActive:hover {
+  background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover));
+}

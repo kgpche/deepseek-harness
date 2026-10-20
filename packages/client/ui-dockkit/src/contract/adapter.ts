@@ -82,6 +82,8 @@ export interface DockIntents {
   readonly addTab: (paneId: PaneId) => void
   /** Destroy a tab. */
   readonly closeTab: (tabId: TabId) => void
+  /** A chip was double-clicked; absent when the embedder pins no preview tab. */
+  readonly doubleClickTab?: (tabId: TabId) => void
   /** Copy a tab beside itself. No kit control drives this; embedders reach it through their own API. */
   readonly duplicateTab: (tabId: TabId) => void
   /** Float a tab, at `rect` when the release point decided one (a drag released clear of the surface). */

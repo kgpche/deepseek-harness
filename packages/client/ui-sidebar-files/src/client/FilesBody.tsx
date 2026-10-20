@@ -69,11 +69,16 @@ export function failureLine(t: TranslateNS<'sidebarFiles'>, failure: RemoteFailu
   }
 }
 
-/** What every level shares: the tab's tree and the two gestures. */
+/** What every level shares: the tab's tree, the open gesture, and the reveal mark. */
 interface TreeContext {
   readonly state: FilesTabState
   readonly onToggle: (parent: string, path: string) => void
-  readonly onOpen: (path: string) => void
+  /** Open the file; a pinned open keeps its own tab instead of the preview slot. */
+  readonly onOpen: (path: string, pinned: boolean) => void
+  /** The viewer pane's active resource address, for the row that shows it. */
+  readonly activeAddress: string | undefined
+  /** The session-relative `file:` address of one row under this tree's root. */
+  readonly addressOf: (path: string) => string
   readonly t: TranslateNS<'sidebarFiles'>
 }
 
@@ -93,9 +98,26 @@ function Entry({ parent, entry, tree }: { parent: string; entry: WorkspaceDirect
     )
   }
   if (entry.type === 'file') {
+    const active = tree.addressOf(path) === tree.activeAddress
     return (
       <li className={css.item} data-files-entry="file" data-files-path={path}>
-        <button type="button" className={css.row} onClick={() => { tree.onOpen(path) }}>
+        <button
+          type="button"
+          className={clsx(css.row, active && css.rowActive)}
+          data-files-active={active || undefined}
+          // VSCode's explorer gestures: a single click previews, a double click
+          // opens pinned. The click of the second tap is the double click's own
+          // (its detail counts it), so it opens nothing here.
+          onClick={(event) => { if (event.detail < 2) tree.onOpen(path, false) }}
+          onDoubleClick={() => { tree.onOpen(path, true) }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+            // The button's Enter activation would fire the preview click; the
+            // keyboard opens pinned, so the keydown takes the gesture alone.
+            event.preventDefault()
+            tree.onOpen(path, true)
+          }}
+        >
           <FileTypeIcon kind={classifyFileType(entry.name)} size={16} className={css.fileIcon} />
           <span className={css.name}>{entry.name}</span>
         </button>
@@ -139,7 +161,7 @@ function Level({ path, tree }: { path: string; tree: TreeContext }): ReactNode {
 /** The file tree's body: the workspace root and whatever the reader has opened under it. */
 export function FilesBody({
   useTabInfo, sessionId, useSessions, useStore, actions,
-  start, refresh, setAutoRefresh, toggle, t, renderSlot,
+  start, refresh, setAutoRefresh, toggle, activeResource, t, renderSlot,
 }: FilesBodyProps): ReactNode {
   const { tab } = useTabInfo()
   useEffect(() => tab.actions.bindCommands({ refresh: () => { refresh(tab.id) } }), [tab.actions, tab.id, refresh])
@@ -184,7 +206,11 @@ export function FilesBody({
     state,
     onToggle: (parent, path) => { toggle(tab.id, parent, path, state.expanded, signal) },
     // Every row is under the tree's root, so its address is session-relative.
-    onOpen: (path) => { tabActions.openResource(fileAddressFor(sessionId, state.root, path)) },
+    addressOf: path => fileAddressFor(sessionId, state.root, path),
+    onOpen: (path, pinned) => {
+      tabActions.openResource(fileAddressFor(sessionId, state.root, path), { preview: !pinned })
+    },
+    activeAddress: activeResource(),
     t,
   }
   const reload = (): void => {

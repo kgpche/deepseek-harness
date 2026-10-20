@@ -14,7 +14,7 @@ import { applyOp } from '../src/engine/operations.ts'
 import { DockController } from '../src/engine/controller.ts'
 import { createIdMinter, createInitialState } from '../src/engine/initial.ts'
 import {
-  activeDockPaneId, findContentTab, findPaneContentTab, planDropTab, planDuplicateTab, planFloatTab, planOpenContent,
+  activeDockPaneId, findContentTab, findPaneContentTab, planDropTab, planDuplicateTab, planFloatTab, planOpenContent, planPinTab,
   planPlaceTab, planSetExpanded, planSetMode, planSettle, planSplitPane, planUnfloatPane, planAddTab,
 } from '../src/engine/planner.ts'
 import {
@@ -402,5 +402,52 @@ describe('planned intents survive replay', () => {
 
     expect(applyAll(state, ops)).toEqual(current)
     expect(fileTab(asTab('t'), 'dsh-resource://file/session/s/a.txt', 'a.txt').kind).toBe('file')
+  })
+})
+
+describe('preview opens', () => {
+  it('reuses the pane\'s preview slot in place, focusing it, and undo restores the shown content', () => {
+    const { state, minter } = seededState()
+    const pane = activeDockPaneId(state)
+    const first = planOpenContent(state, minter.next, { kind: 'file', contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', preview: true })
+    let current = applyAll(state, first.ops)
+    const slot = first.tabId
+    expect(current.tabs[slot]).toMatchObject({ contentId: 'dsh-resource://file/session/s/a.txt', preview: true })
+    // The second preview replaces the slot's content; no chip is added.
+    const second = planOpenContent(current, minter.next, { kind: 'file', contentId: 'dsh-resource://file/session/s/b.txt', title: 'b.txt', preview: true })
+    const recorded: LayoutOp[] = []
+    for (const op of second.ops) {
+      const step = applyOp(current, op)
+      recorded.unshift(...step.inverse)
+      current = step.state
+    }
+    expect(second.tabId).toBe(slot)
+    expect(current.tabs[slot]).toMatchObject({ contentId: 'dsh-resource://file/session/s/b.txt', preview: true })
+    expect(getPane(current, pane).tabs).toHaveLength(2)
+    // One undo step replays the recorded inverses: the slot shows what it showed before.
+    expect(applyAll(current, recorded)).toMatchObject({ tabs: { [slot]: { contentId: 'dsh-resource://file/session/s/a.txt', preview: true } } })
+  })
+
+  it('stacks pinned opens as their own chips, and a pinned open keeps a revealed preview', () => {
+    const { state, minter } = seededState()
+    const preview = planOpenContent(state, minter.next, { kind: 'file', contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', preview: true })
+    let current = applyAll(state, preview.ops)
+    const pinned = planOpenContent(current, minter.next, { kind: 'file', contentId: 'dsh-resource://file/session/s/b.txt', title: 'b.txt' })
+    current = applyAll(current, pinned.ops)
+    expect(pinned.tabId).not.toBe(preview.tabId)
+    expect(current.tabs[pinned.tabId]?.preview).toBeUndefined()
+    // Reopening the previewed content pinned converts the slot instead of duplicating it.
+    const keep = planOpenContent(current, minter.next, { kind: 'file', contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', preview: false })
+    expect(keep.tabId).toBe(preview.tabId)
+    expect(keep.ops.map(op => op.type)).toEqual(['focusTab', 'setTabPreview'])
+  })
+
+  it('pins a preview tab and leaves a pinned one alone', () => {
+    const { state, minter } = seededState()
+    const preview = planOpenContent(state, minter.next, { kind: 'file', contentId: 'dsh-resource://file/session/s/a.txt', title: 'a.txt', preview: true })
+    let current = applyAll(state, preview.ops)
+    expect(planPinTab(current, preview.tabId)).toEqual([{ type: 'setTabPreview', tabId: preview.tabId, preview: false }])
+    current = applyAll(current, [{ type: 'setTabPreview', tabId: preview.tabId, preview: false }])
+    expect(planPinTab(current, preview.tabId)).toEqual([])
   })
 })

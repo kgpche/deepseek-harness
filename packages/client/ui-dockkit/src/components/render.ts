@@ -17,6 +17,8 @@ export interface PaneCallbacks {
   readonly onSplitPane: (paneId: PaneId) => void
   readonly onAddTab: (paneId: PaneId) => void
   readonly onCloseTab: (tabId: TabId) => void
+  /** A chip was double-clicked; the embedder pins a preview tab here. */
+  readonly onDoubleClickTab?: (tabId: TabId) => void
   /** Begin dragging a tab; the surface owns the gesture from here. */
   readonly onTabPressed: (tabId: TabId, event: ReactPointerEvent<HTMLElement>) => void
   /** Begin dragging a divider inside `splitId`, at the boundary after `index`. */

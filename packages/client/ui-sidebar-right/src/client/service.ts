@@ -160,6 +160,10 @@ export interface SidebarRightPlacement {
    * permits duplicates. Pages always deduplicate within the target pane.
    */
   readonly revealIfOpened?: boolean
+  /** Open as the target pane's preview slot: its existing preview tab is reused in place. */
+  readonly preview?: boolean
+  /** Set by the Tab domain: the caller is a page tab landing in its own pane by default. */
+  readonly fromPageTab?: boolean
 }
 
 /** How a caller wants a resource opened. */
@@ -236,6 +240,18 @@ export interface ISidebarRight {
    * @param tabId - the tab; one that does not exist is left alone.
    */
   focus(tabId: TabId): void
+  /**
+   * Make the on-screen Session's preview tab permanent. Recorded when it pins;
+   * a tab that is not a preview changes nothing.
+   * @param tabId - the tab to pin.
+   */
+  pinTab(tabId: TabId): void
+  /**
+   * The active tab's resource address, when a resource (not a page) is active.
+   * @returns the `dsh-resource://` address, or `undefined` with no Session on
+   *   screen or a page tab active.
+   */
+  activeResource(): string | undefined
   /**
    * Split a docked pane to its right and seed the new pane, under the same
    * pane budget and room rule as the strip's split control. Recorded when it
@@ -417,9 +433,21 @@ export class SidebarRightController implements ISidebarRight {
     params: SidebarRightNavigationParams,
   ): void {
     const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
-    const targetPane = surface === undefined ? undefined : placement.paneId ?? activeDockPaneId(surface.layout)
+    const layout = surface?.layout
+    // A page tab's own default open (the workspace file tree's file click) lands
+    // beside the page rather than over it, whose active body would hide the
+    // page: with one docked pane the split below creates the sibling, and with
+    // two the other docked pane hosts the open. VSCode's explorer keeps its
+    // place beside the editor the same way; an explicitly named pane bypasses this.
+    const pageCaller = placement.fromPageTab === true
+    const dockPanes = layout === undefined ? [] : dockPaneIds(layout)
+    const splitFromPage = pageCaller && dockPanes.length < 2
+    const routedPaneId = pageCaller && dockPanes.length >= 2
+      ? dockPanes.find(id => id !== placement.paneId)
+      : placement.paneId
+    const targetPane = surface === undefined ? undefined : routedPaneId ?? activeDockPaneId(surface.layout)
     const target = targetPane === undefined ? undefined : surface?.layout.nodes[targetPane]
-    const preferNewPane = placement.preferNewPane === true
+    const preferNewPane = (splitFromPage || placement.preferNewPane === true)
       && placement.replaceTab === undefined
       && surface !== undefined
       && target?.kind === 'pane'
@@ -433,17 +461,17 @@ export class SidebarRightController implements ISidebarRight {
       kind: claim.kind,
       contentId: claim.contentId,
       title: claim.title,
-      ...placement.paneId === undefined ? {} : { paneId: placement.paneId },
-      ...preferNewPane ? { preferNewPane: true } : {},
+      ...routedPaneId === undefined ? {} : { paneId: routedPaneId },
+      ...preferNewPane === true ? { preferNewPane: true } : {},
       ...placement.replaceTab === undefined ? {} : { replaceTab: placement.replaceTab },
       ...placement.revealIfOpened === undefined ? {} : { revealIfOpened: placement.revealIfOpened },
+      ...placement.preview === undefined ? {} : { preview: placement.preview },
     }, (tabId) => { this.tabDomain.navigate(sessionId, tabId, { address, params }) }) }
-    const layout = surface?.layout
     const replaced = placement.replaceTab === undefined ? undefined : layout?.tabs[placement.replaceTab]
     const replacementPane = replaced === undefined || layout === undefined ? undefined : findTabPane(layout, replaced.id)
     const revealed = layout === undefined ? undefined
       : claim.contentId === pageAddress(claim.kind)
-        ? findPaneContentTab(layout, replacementPane?.host === 'dock' ? replacementPane.id : placement.paneId ?? activeDockPaneId(layout), claim.contentId, claim.kind)
+        ? findPaneContentTab(layout, replacementPane?.host === 'dock' ? replacementPane.id : routedPaneId ?? activeDockPaneId(layout), claim.contentId, claim.kind)
         : placement.revealIfOpened === false ? undefined : findContentTab(layout, claim.contentId, claim.kind)
     if (replaced === undefined || replaced.id === revealed) { commit(); return }
     this.removeAfterCleanup(sessionId, replaced, commit)
@@ -494,6 +522,27 @@ export class SidebarRightController implements ISidebarRight {
     const { sessionId, actions } = this.require()
     if (this.mountedSurface()?.layout.tabs[tabId] === undefined) return
     actions.focusTab(sessionId, tabId)
+  }
+
+  /**
+   * Make the on-screen Session's preview tab permanent; a non-preview changes nothing.
+   * @param tabId - the tab to pin.
+   */
+  pinTab(tabId: TabId): void {
+    const { sessionId, actions } = this.require()
+    if (this.mountedSurface()?.layout.tabs[tabId] === undefined) return
+    actions.pinTab(sessionId, tabId)
+  }
+
+  /**
+   * The active tab's resource address; pages and missing surfaces report none.
+   * @returns the active `dsh-resource://` address, or `undefined`.
+   */
+  activeResource(): string | undefined {
+    const layout = this.mountedSurface()?.layout
+    const active = this.active()
+    if (layout === undefined || active === undefined || active.contentId.startsWith('sidebar://')) return undefined
+    return active.contentId
   }
 
   /**

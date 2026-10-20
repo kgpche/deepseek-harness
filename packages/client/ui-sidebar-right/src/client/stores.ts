@@ -33,7 +33,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-dockkit'
 import {
   activeDockPaneId, createInitialState, dockPaneIds, EMPTY_HISTORY, findContentTab, findPaneContentTab, findTabPane, getPane,
-  planDropTab, planDuplicateTab, planFloatTab, planOpenContent, planPlaceTab, planResizeSplit, planSetExpanded,
+  planDropTab, planDuplicateTab, planFloatTab, planOpenContent, planPinTab, planPlaceTab, planResizeSplit, planSetExpanded,
   planSetMode, planSettle, planSplitPane, planUnfloatPane, record, replay, stepBack, stepForward,
 } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { GUIDE_KIND, pageAddress, type SidebarRightSeed } from './contract/seed.ts'
@@ -93,6 +93,8 @@ export interface OpenContentIntent {
   readonly replaceTab?: TabId
   /** Resource tabs reveal an existing identity by default; `false` permits duplicates. Pages always deduplicate within the target pane. */
   readonly revealIfOpened?: boolean
+  /** Open into the target pane's preview slot, reusing its existing preview tab in place. */
+  readonly preview?: boolean
 }
 
 /** A mint that counts, so the surface can carry its position forward. */
@@ -231,6 +233,7 @@ type SidebarRightActions = {
     settled: (tabId: TabId) => void,
   ) => void
   duplicateTab: (draft: SidebarRightState, sessionId: string, tabId: TabId) => void
+  pinTab: (draft: SidebarRightState, sessionId: string, tabId: TabId) => void
   closeTab: (draft: SidebarRightState, sessionId: string, tabId: TabId) => void
   focusTab: (draft: SidebarRightState, sessionId: string, tabId: TabId) => void
   focusPane: (draft: SidebarRightState, sessionId: string, paneId: PaneId) => void
@@ -328,11 +331,22 @@ export function createSidebarRightStore(
           const split = intent.preferNewPane === true && replace === undefined && revealed === undefined
             ? planSplitPane(state, mint, paneId, (id) => {
               openedInNewPane = id
-              return { id, kind, contentId, title }
+              return { id, kind, contentId, title, ...(intent.preview === true ? { preview: true } : {}) }
             })
             : []
           const planned = revealed !== undefined
-            ? { ops: [{ type: 'focusTab' as const, tabId: revealed }], tabId: revealed }
+            ? {
+              ops: [
+                { type: 'focusTab' as const, tabId: revealed },
+                // The planner's pinned-open rule, mirrored here because the
+                // store resolves the reveal itself: a pinned open keeps the
+                // preview tab already showing the content.
+                ...(intent.preview === false && state.tabs[revealed]?.preview === true
+                  ? [{ type: 'setTabPreview' as const, tabId: revealed, preview: false }]
+                  : []),
+              ],
+              tabId: revealed,
+            }
             : openedInNewPane !== undefined
               ? { ops: split, tabId: openedInNewPane }
               : planOpenContent(state, mint, {
@@ -344,6 +358,8 @@ export function createSidebarRightStore(
                 ...page
                   ? { revealIfOpened: false }
                   : intent.revealIfOpened === undefined ? {} : { revealIfOpened: intent.revealIfOpened },
+                // Pages are permanent surface furniture and never take a preview slot.
+                ...page || intent.preview === undefined ? {} : { preview: intent.preview },
               })
           ops.push(...planned.ops)
           if (replace !== undefined && replace !== planned.tabId) ops.push({ type: 'closeTab', tabId: replace })
@@ -355,6 +371,10 @@ export function createSidebarRightStore(
       duplicateTab: (d, sessionId: string, tabId: TabId) => {
         d.bySession = seat(d, sessionId, s =>
           advance(s, (state, mint) => pageKind(state, tabId) !== undefined ? [] : planDuplicateTab(state, mint, tabId).ops, seed))
+      },
+      // Pinning is one recorded entry; a tab that is not a preview changes nothing.
+      pinTab: (d, sessionId: string, tabId: TabId) => {
+        d.bySession = seat(d, sessionId, s => advance(s, state => planPinTab(state, tabId), seed))
       },
       // A tab already gone — closed twice by a racing callback and the user — is
       // left alone rather than handed to the kit, which refuses an unknown tab.

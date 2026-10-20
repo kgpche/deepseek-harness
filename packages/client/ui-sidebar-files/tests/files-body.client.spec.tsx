@@ -150,12 +150,39 @@ describe('FilesBody', () => {
     await act(() => script.watches.ready(ROOT))
     await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
     fireEvent.click(view.container.querySelector(`[data-files-path="${ROOT}/README.md"] > button`)!)
-    // Every row sits under the tree's root, so the address is the path relative to it.
-    expect(tabActions.openResource).toHaveBeenCalledWith(fileAddressFor(SESSION, ROOT, `${ROOT}/README.md`))
-    expect(tabActions.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s-test/README.md')
+    // Every row sits under the tree's root, so the address is the path relative
+    // to it; a single click opens VSCode-style, into the viewer pane's preview slot.
+    expect(tabActions.openResource).toHaveBeenCalledWith(fileAddressFor(SESSION, ROOT, `${ROOT}/README.md`), { preview: true })
+    expect(tabActions.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s-test/README.md', { preview: true })
     const other = view.container.querySelector(`[data-files-path="${ROOT}/pipe"]`)!
     expect(other.querySelector('button')).toBeNull()
     expect(other.querySelector('[aria-disabled="true"]')?.getAttribute('title')).toBe(zh['entry.other'])
+  })
+
+  it('a double click and the keyboard open pinned instead of previewing', async () => {
+    const { view, script, tabActions } = mountBody()
+    await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    const row = view.container.querySelector(`[data-files-path="${ROOT}/README.md"] > button`)!
+    fireEvent.doubleClick(row)
+    expect(tabActions.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/s-test/README.md', { preview: false })
+    // The second tap of a double click is the double click's own: its click event opens nothing.
+    const calls = tabActions.openResource.mock.calls.length
+    fireEvent.click(row, { detail: 2 })
+    expect(tabActions.openResource.mock.calls.length).toBe(calls)
+    fireEvent.keyDown(row, { key: 'Enter' })
+    expect(tabActions.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/s-test/README.md', { preview: false })
+  })
+
+  it('marks the row of the file the viewer pane shows', async () => {
+    const active = fileAddressFor(SESSION, ROOT, `${ROOT}/README.md`)
+    const { view, script } = mountBody(ROOT, undefined, active)
+    await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    const activeRow = view.container.querySelector(`[data-files-path="${ROOT}/README.md"] > button`)!
+    const idleRow = view.container.querySelector(`[data-files-path="${ROOT}/.env"] > button`)!
+    expect(activeRow.getAttribute('data-files-active')).toBe('true')
+    expect(idleRow.getAttribute('data-files-active')).toBeNull()
   })
 
   it('marks a cut listing and an empty one', async () => {

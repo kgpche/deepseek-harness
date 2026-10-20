@@ -400,6 +400,12 @@
   mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
 }
 
+/* A preview chip's title draws italic, the one mark of the pane's reusable
+   slot; pinning clears the flag and the emphasis with it. */
+.tab[data-dockkit-tab-preview] .tabTitle {
+  font-style: italic;
+}
+
 /* While the close shows, the title is gone under the close's circle and fades
    out over the 16px before it: the circle spans the chip's last 24px and the
    title ends 10px inside the chip, so the title's last 14px are under it.

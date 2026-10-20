@@ -69,8 +69,10 @@ interface Held extends TabOccurrence {
   readonly controller: AbortController
   /** The docked pane holding the record at the last sync; `undefined` while it floats or before any sync. */
   paneId: PaneId | undefined
-  /** Whether the resource model has been asked to hold the address. */
-  pinned: boolean
+  /** Holds the resource pin of `pinnedAddress`; replaced when a retab moves the tab to a new address. */
+  pinController: AbortController
+  /** The address whose resource this occurrence pins; `undefined` before the first pin. */
+  pinnedAddress: string | undefined
 }
 
 /** Every session's occurrences. */
@@ -79,7 +81,7 @@ export class TabDomain {
 
   /**
    * @param navigator - where tab actions go, aimed at the tab's session; the navigation controller.
-   * @param pin - `ctx.resources.pin`, called once per occurrence at its first sync.
+   * @param pin - `ctx.resources.pin`, called for the occurrence's current address and again whenever a retab moves it.
    */
   constructor(
     private readonly navigator: SidebarRightNavigator,
@@ -105,10 +107,22 @@ export class TabDomain {
       const occurrence = held.get(tab.id) ?? this.hold(sessionId, tab.id, { address: tab.contentId, params: undefined, revision: 0 })
       const pane = findTabPane(layout, tab.id)
       occurrence.paneId = pane.host === 'dock' ? pane.id : undefined
-      if (occurrence.pinned) continue
-      occurrence.pinned = true
-      this.pin(occurrence.navigation.getSnapshot().address, occurrence.signal)
+      // A retabbed preview slot reuses the TabId, so the pinned address follows
+      // the navigation rather than staying with the first content the tab held.
+      this.repin(occurrence, occurrence.navigation.getSnapshot().address)
     }
+  }
+
+  /** Move the occurrence's resource pin to `address`; unchanged addresses keep the pin they hold. */
+  private repin(occurrence: Held, address: string): void {
+    if (occurrence.pinnedAddress === address) return
+    occurrence.pinController.abort()
+    const pinController = new AbortController()
+    // The record's lifetime ends this pin with it, whichever address it holds.
+    occurrence.controller.signal.addEventListener('abort', () => { pinController.abort() }, { once: true })
+    occurrence.pinController = pinController
+    this.pin(address, pinController.signal)
+    occurrence.pinnedAddress = address
   }
 
   /**
@@ -140,6 +154,9 @@ export class TabDomain {
       return
     }
     existing.navigation.set({ ...target, revision: existing.navigation.getSnapshot().revision + 1 })
+    // A retab reuses the TabId; the settled navigation already names the new
+    // address, so the pin moves now rather than at the next layout sync.
+    this.repin(existing, target.address)
   }
 
   /** Abort every occurrence of every session; the package is unloading. */
@@ -162,6 +179,9 @@ export class TabDomain {
   private hold(sessionId: SessionId, tabId: TabId, navigation: SidebarRightTabNavigation): Held {
     const controller = new AbortController()
     const { navigator } = this
+    const pinController = new AbortController()
+    // The record's lifetime ends the pin with it; a repin only swaps addresses.
+    controller.signal.addEventListener('abort', () => { pinController.abort() }, { once: true })
     // Where an open from this tab lands, read at call time because the tab may
     // have been dragged since: `replaceTab: true` names this tab; otherwise the
     // pane holding it, unless the caller named another.
@@ -172,6 +192,11 @@ export class TabDomain {
       ...placement.paneId === undefined ? {} : { paneId: placement.paneId },
       ...placement.preferNewPane === undefined ? {} : { preferNewPane: placement.preferNewPane },
       ...placement.revealIfOpened === undefined ? {} : { revealIfOpened: placement.revealIfOpened },
+      ...placement.preview === undefined ? {} : { preview: placement.preview },
+      // The caller is a page tab landing in its own pane by default: the service
+      // reroutes this beside the page instead. An explicitly named pane skips it.
+      ...(placement.paneId === undefined && held.paneId !== undefined
+        && held.navigation.getSnapshot().address.startsWith('sidebar://') ? { fromPageTab: true } : {}),
     })
     const held: Held = {
       id: randomUUID() as SidebarRightOccurrenceId,
@@ -182,7 +207,8 @@ export class TabDomain {
       signal: controller.signal,
       navigation: createSnapshotStore(navigation),
       paneId: undefined,
-      pinned: false,
+      pinController,
+      pinnedAddress: undefined,
       tabActions: {
         bindCommands: (commands) => {
           if (controller.signal.aborted) return () => {}

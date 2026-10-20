@@ -272,6 +272,7 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
                 )}
                 data-dockkit-tab={tabId}
                 data-dockkit-tab-quiet={quiet || undefined}
+                data-dockkit-tab-preview={tab.preview || undefined}
                 ref={(element) => {
                   if (element === null) chips.delete(tabId)
                   else chips.set(tabId, element)
@@ -289,6 +290,10 @@ export function TabStrip({ state, pane, callbacks }: TabPanelProps): ReactNode {
                 onClick={(event) => {
                   event.stopPropagation()
                   activate(tabId)
+                }}
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                  callbacks.onDoubleClickTab?.(tabId)
                 }}
                 onKeyDown={(event) => {
                   // Keys on the chip's nested close control are that control's.

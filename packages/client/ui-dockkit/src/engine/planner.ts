@@ -51,6 +51,12 @@ export interface OpenContentInput {
    * a second one being opened. Defaults to `true`.
    */
   readonly revealIfOpened?: boolean
+  /**
+   * Open as the target pane's reusable preview slot: when the pane already holds
+   * a preview tab, its content is replaced in place instead of adding a chip.
+   * A copy of the content that is already open is still revealed, never duplicated.
+   */
+  readonly preview?: boolean
 }
 
 /** An intent that both acts and names the tab it settled on. */
@@ -87,6 +93,19 @@ export function findContentTab(state: LayoutState, contentId: string, kind?: str
   for (const paneId of [...dockPaneIds(state), ...state.floats]) {
     const found = findPaneContentTab(state, paneId, contentId, kind)
     if (found !== undefined) return found
+  }
+  return undefined
+}
+
+/**
+ * The pane's preview slot, if it holds one: the first tab marked `preview`.
+ * @param state - current layout.
+ * @param paneId - the pane whose strip is searched, docked or floating.
+ * @returns the preview tab, or `undefined` when the pane holds none.
+ */
+export function findPanePreviewTab(state: LayoutState, paneId: PaneId): TabId | undefined {
+  for (const tabId of getPane(state, paneId).tabs) {
+    if (state.tabs[tabId]?.preview === true) return tabId
   }
   return undefined
 }
@@ -183,7 +202,7 @@ export function planAddTab(
 }
 
 /**
- * Open content, or focus the tab already showing it.
+ * Open content, focus the tab already showing it, or reuse the pane's preview slot.
  * @param state - current layout.
  * @param mint - id source for a newly opened tab.
  * @param input - identity, copy, and optional placement.
@@ -193,18 +212,50 @@ export function planOpenContent(state: LayoutState, mint: Mint, input: OpenConte
   const existing = input.revealIfOpened === false
     ? undefined
     : findContentTab(state, input.contentId, input.kind)
-  if (existing !== undefined) return { ops: [{ type: 'focusTab', tabId: existing }], tabId: existing }
+  if (existing !== undefined) {
+    // VSCode's rule: a pinned open of content that sits in the preview slot
+    // keeps it, instead of only focusing what would stay a preview.
+    if (input.preview === false && state.tabs[existing]?.preview === true) {
+      return { ops: [{ type: 'focusTab', tabId: existing }, { type: 'setTabPreview', tabId: existing, preview: false }], tabId: existing }
+    }
+    return { ops: [{ type: 'focusTab', tabId: existing }], tabId: existing }
+  }
   const paneId = input.paneId ?? activeDockPaneId(state)
+  if (input.preview === true) {
+    const slot = findPanePreviewTab(state, paneId)
+    if (slot !== undefined) {
+      // The slot keeps its id and strip position; only what it shows changes, so
+      // the embedder's per-tab content binding survives the replacement.
+      return {
+        ops: [
+          { type: 'retabTab', tabId: slot, next: { id: slot, kind: input.kind, contentId: input.contentId, title: input.title, preview: true } },
+          { type: 'focusTab', tabId: slot },
+        ],
+        tabId: slot,
+      }
+    }
+  }
   const tab: TabRecord = {
     id: mint('tab'),
     kind: input.kind,
     contentId: input.contentId,
     title: input.title,
+    ...(input.preview === true ? { preview: true } : {}),
   }
   return {
     ops: [{ type: 'openTab', paneId, tab, index: input.index ?? getPane(state, paneId).tabs.length }],
     tabId: tab.id,
   }
+}
+
+/**
+ * Make a preview tab permanent; a pinned or unmarked tab changes nothing.
+ * @param state - current layout.
+ * @param tabId - the tab to pin.
+ * @returns the operation, or none when the tab is not a preview.
+ */
+export function planPinTab(state: LayoutState, tabId: TabId): readonly LayoutOp[] {
+  return state.tabs[tabId]?.preview === true ? [{ type: 'setTabPreview', tabId, preview: false }] : NOTHING
 }
 
 /**

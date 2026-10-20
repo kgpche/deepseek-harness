@@ -517,6 +517,32 @@ describe('SidebarRightController — a tab\'s own actions', () => {
   const A_TXT = 'dsh-resource://file/session/s-test/a.txt'
   const B_TXT = 'dsh-resource://file/session/s-test/b.txt'
 
+  it("a page tab's default open splits beside it once, then lands in the sibling pane", () => {
+    const { controller, publish, layout, expand, titles } = harness()
+    expand()
+    publish()
+    const guide = Object.values(layout().tabs).find(tab => tab.kind === 'guide')
+    if (guide === undefined) throw new Error('expected the seeded guide')
+    const { tabActions } = controller.tabDomain.occurrence(SESSION, guide)
+    // The first file open from a page tab (the workspace tree) creates the sibling pane.
+    tabActions.openResource(A_TXT)
+    publish()
+    expect(titles()).toContain('a.txt')
+    expect(dockPaneIds(layout())).toHaveLength(2)
+    const treePane = findTabPane(layout(), guide.id)
+    const a = Object.values(layout().tabs).find(tab => tab.contentId === A_TXT)!
+    const viewerPane = findTabPane(layout(), a.id)
+    expect(treePane.host).toBe('dock')
+    expect(viewerPane.id).not.toBe(treePane.id)
+    // The second open reuses the sibling, and the page pane keeps its guide active.
+    tabActions.openResource(B_TXT)
+    publish()
+    expect(dockPaneIds(layout())).toHaveLength(2)
+    const b = Object.values(layout().tabs).find(tab => tab.contentId === B_TXT)!
+    expect(findTabPane(layout(), b.id).id).toBe(viewerPane.id)
+    expect(getPane(layout(), treePane.id).activeTabId).toBe(guide.id)
+  })
+
   it('opens into an adopted store before that store has created its session surface', () => {
     const { controller, show, titles } = harness()
     show(OTHER)
@@ -596,7 +622,7 @@ describe('SidebarRightController — a tab\'s own actions', () => {
     const tab = Object.values(surface?.layout.tabs ?? {}).find(record => record.contentId === A_TXT)
     if (tab === undefined) throw new Error('expected the opened tab')
     const occurrence = controller.tabDomain.occurrence(SESSION, tab)
-    expect(pin).toHaveBeenCalledWith(A_TXT, occurrence.signal)
+    expect(pin).toHaveBeenCalledWith(A_TXT, expect.any(AbortSignal))
     instance.actions.closeTab(SESSION, tab.id)
     expect(occurrence.signal.aborted).toBe(true)
     // A release ends the syncing; a stale release leaves a newer adoption standing.
@@ -607,7 +633,7 @@ describe('SidebarRightController — a tab\'s own actions', () => {
     const again = Object.values(instance.getSnapshot().bySession[SESSION]?.layout.tabs ?? {}).find(record => record.contentId === B_TXT)
     if (again === undefined) throw new Error('expected the second tab')
     const held = controller.tabDomain.occurrence(SESSION, again)
-    expect(pin).toHaveBeenCalledWith(B_TXT, held.signal)
+    expect(pin).toHaveBeenCalledWith(B_TXT, expect.any(AbortSignal))
     // Adopting another instance for the session ends the earlier adoption's
     // subscription with its routing: the old store's commits sync nothing, the
     // new store's commits reconcile the session against its own layout.

@@ -141,17 +141,25 @@ export interface FilesInjected {
    * @param signal - the tab record's lifetime.
    */
   readonly toggle: (tabId: TabId, parentPath: string, path: string, expanded: readonly string[], signal: AbortSignal) => void
+  /**
+   * The viewer pane's active resource address, for the row that shows it.
+   * Read at render time; the surface re-renders the tree on every layout commit.
+   * @returns the active `dsh-resource://` address, or `undefined` while a page is active.
+   */
+  readonly activeResource: () => string | undefined
 }
 
 /**
  * Bind the tree's face to one directory listing.
  * @param list - the bound `workspaceFiles.list` call.
  * @param watch - target-scoped directory observation.
+ * @param activeResource - the surface's active resource address, for the reveal mark.
  * @returns the Slot `inject` factory: session and bound actions in, face out.
  */
 export function filesFace(
   list: ListWorkspaceDirectory,
   watch: WatchWorkspaceDirectory,
+  activeResource: () => string | undefined,
 ): (sessionId: SessionId, actions: BoundActions<ReturnType<typeof createFilesStore>>) => FilesInjected {
   return (
     sessionId: SessionId,
@@ -181,6 +189,7 @@ export function filesFace(
       })
     }
     return {
+      activeResource,
       refresh: (tabId) => { void roots.get(tabId)?.refreshTree() },
       setAutoRefresh: (tabId, enabled) => {
         actions.autoRefresh(tabId, enabled)

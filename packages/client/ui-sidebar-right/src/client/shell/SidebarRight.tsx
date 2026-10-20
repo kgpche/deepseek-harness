@@ -169,6 +169,8 @@ export function intentsFor(sessionId: SessionId, actions: Store['actions'], open
     // already holds, so the ask is idempotent all the same.
     addTab: (paneId) => { openTab(GUIDE_KIND, { paneId, revealIfOpened: false }) },
     closeTab: closeTab ?? ((tabId) => { actions.closeTab(sessionId, tabId) }),
+    // VSCode's tab gesture: a double-click on a preview chip keeps it.
+    doubleClickTab: (tabId) => { actions.pinTab(sessionId, tabId) },
     duplicateTab: (tabId) => { actions.duplicateTab(sessionId, tabId) },
     floatTab: (tabId, rect?: FloatRect) => { actions.floatTab(sessionId, tabId, rect) },
     unfloatPane: (paneId) => { actions.unfloatPane(sessionId, paneId) },

@@ -212,6 +212,7 @@ function Surface({
     onSplitPane: intents.splitPane.bind(intents),
     onAddTab: intents.addTab.bind(intents),
     onCloseTab: intents.closeTab.bind(intents),
+    ...(intents.doubleClickTab === undefined ? {} : { onDoubleClickTab: intents.doubleClickTab.bind(intents) }),
     // A press is not yet a drag: the chip lifts, and the drop preview follows,
     // once the pointer has travelled the threshold. A release before that is a
     // click and reports nothing here.

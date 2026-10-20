@@ -82,7 +82,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar-files: dictionaries')
 
   const store = createFilesStore()
-  const inject = filesFace(createList(ctx.remote), createWatch(ctx.remote))
+  const inject = filesFace(createList(ctx.remote), createWatch(ctx.remote), () => ctx.sidebarRight.activeResource())
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
     {
       name: 'sidebar.right.pane.tab', key: FILES_ID, locale: NS, store, inject,

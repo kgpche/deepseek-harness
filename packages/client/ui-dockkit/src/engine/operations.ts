@@ -174,6 +174,26 @@ function applyInsertTab(state: LayoutState, op: Extract<LayoutOp, { type: 'inser
   }
 }
 
+/** Replace one tab's record in place, keeping its id, strip slot, and focus. */
+function applyRetabTab(state: LayoutState, op: Extract<LayoutOp, { type: 'retabTab' }>): ApplyResult {
+  const tab = getTab(state, op.tabId)
+  return {
+    state: withTabs(state, { [op.tabId]: op.next }),
+    inverse: [{ type: 'retabTab', tabId: op.tabId, next: tab }],
+  }
+}
+
+/** Turn a preview tab into a permanent one, or back; placement and focus stay put. */
+function applySetTabPreview(state: LayoutState, op: Extract<LayoutOp, { type: 'setTabPreview' }>): ApplyResult {
+  const tab = getTab(state, op.tabId)
+  const previous = tab.preview ?? false
+  if (previous === op.preview) throw new Error('layout: setTabPreview requires a change')
+  return {
+    state: withTabs(state, { [op.tabId]: { ...tab, preview: op.preview } }),
+    inverse: [{ type: 'setTabPreview', tabId: op.tabId, preview: previous }],
+  }
+}
+
 /** Destroy a tab and its content state; a floating host pane goes with its only tab. */
 function applyCloseTab(state: LayoutState, op: Extract<LayoutOp, { type: 'closeTab' }>): ApplyResult {
   const tab = getTab(state, op.tabId)
@@ -427,6 +447,8 @@ export function applyOp(state: LayoutState, op: LayoutOp): ApplyResult {
     case 'openTab': return applyOpenTab(state, op)
     case 'insertTab': return applyInsertTab(state, op)
     case 'closeTab': return applyCloseTab(state, op)
+    case 'retabTab': return applyRetabTab(state, op)
+    case 'setTabPreview': return applySetTabPreview(state, op)
     case 'insertPane': return applyInsertPane(state, op)
     case 'moveTab': return applyMoveTab(state, op)
     case 'reorderTab': return applyReorderTab(state, op)

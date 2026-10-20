@@ -20,7 +20,7 @@ const LEVEL: DirLevel = { entries: [{ name: 'src', type: 'directory' }], truncat
 function mount() {
   const instance = createFilesStore().create()
   const script = scriptedList()
-  const face = filesFace(script.list, script.watch)(SESSION, instance.actions)
+  const face = filesFace(script.list, script.watch, () => undefined)(SESSION, instance.actions)
   const controller = new AbortController()
   onTestFinished(async () => {
     controller.abort()
