@@ -55,6 +55,14 @@ jobs:
         run: |
           pnpm run build:artifacts
           pnpm run build:web
+      # Windows packaging always reads apps/desktop/.env.windows, even unsigned
+      # (only the signing secrets inside are conditional); unsigned builds skip
+      # policy validation, so the example's empty update origins are enough.
+      - name: Provide unsigned packaging settings (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        working-directory: apps/desktop
+        run: cp .env.windows.example .env.windows
       - name: Package unsigned installer
         working-directory: apps/desktop
         run: pnpm run package -- ${{ matrix.target }} --unsigned
