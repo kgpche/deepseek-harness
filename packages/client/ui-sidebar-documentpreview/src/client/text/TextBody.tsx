@@ -1,4 +1,5 @@
 /** Plain source display for files without a more specific document renderer. */
+import type { CSSProperties } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { DocumentPreviewProps } from '../document/contract.ts'
@@ -27,16 +28,28 @@ function segmentsOf(text: string, spans: readonly { readonly start: number; read
   return segments
 }
 
-/** @param props - document contents and standard tab information. @returns source lines with navigation targets. */
+/** @param props - document contents and standard tab information. @returns source lines with a numbered gutter and navigation targets. */
 export function TextBody({ content, find, useTabInfo }: DocumentPreviewProps): ReactNode {
   const { tab } = useTabInfo()
   const params = tab.navigation.params
   const target = params !== undefined && 'line' in params ? params.line : undefined
   if (content.kind !== 'text') return null
+  // The gutter fits the largest loaded line number, shared by every page.
+  const last = content.pages.reduce((max, page) => Math.max(max, page.offset + page.lines - 1), 0)
+  const digits = Math.max(2, String(Math.max(last, 1)).length)
   return (
-    <div className={css.textDocument} data-textpreview-plain>
+    <div
+      className={css.textDocument}
+      data-textpreview-plain
+      style={{ '--dsw-plain-line-no-width': `${digits}ch` } as CSSProperties}
+    >
       {content.pages.map(page => (
-        <pre key={page.offset} className={css.page} data-textpreview-page={page.offset}>
+        <pre
+          key={page.offset}
+          className={css.page}
+          data-textpreview-page={page.offset}
+          style={{ counterReset: `textpreview-line ${page.offset - 1}` } as CSSProperties}
+        >
           {linesOf(page).map((text, index) => {
             const number = page.offset + index
             const current = find?.currentLine === number

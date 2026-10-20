@@ -165,6 +165,21 @@ describe('TextPreview — pages', () => {
     expect(view.container.querySelector('[data-textpreview-changed]')).toBeNull()
   })
 
+  it('numbers plain lines through a gutter that continues across pages', async () => {
+    const h = harness({ 1: page(1, ['a', 'b'], false), 3: page(3, ['c'], true) })
+    const view = render(<TextPreview {...h.props()} />)
+    await settle()
+    click(view.container, '[data-textpreview-more]')
+    await settle()
+    const plain = view.container.querySelector('[data-textpreview-plain]') as HTMLElement
+    // The shared gutter width fits the largest loaded number (minimum two);
+    // each page resets its counter so numbers continue rather than restart.
+    expect(plain.style.getPropertyValue('--dsw-plain-line-no-width')).toBe('2ch')
+    const pages = [...plain.querySelectorAll('[data-textpreview-page]')] as HTMLElement[]
+    expect(pages[0]?.style.counterReset).toBe('textpreview-line 0')
+    expect(pages[1]?.style.counterReset).toBe('textpreview-line 2')
+  })
+
   it('reads nothing on a remount while the store holds the pages', async () => {
     const h = harness({ 1: page(1, ['one'], true) })
     const first = render(<TextPreview {...h.props()} />)

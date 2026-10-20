@@ -102,9 +102,28 @@
   white-space: inherit;
 }
 
-/* The files tree row's 10px side inset, so a line's text sits where a row's does. */
+/*
+ * The plain body's line gutter, the same scheme the code renderer uses: a CSS
+ * counter per page (reset to the page's offset minus one so numbers continue
+ * across pages) painting a right-aligned ::before; the width fits the largest
+ * loaded line number, shared by every page.
+ */
 .line {
+  position: relative;
   padding: 0 10px;
+  padding-inline-start: calc(var(--dsw-plain-line-no-width, 3ch) + 10px + 10px);
+  counter-increment: textpreview-line;
+  min-height: 1lh;
+}
+
+.line::before {
+  position: absolute;
+  inset-inline-start: 10px;
+  width: var(--dsw-plain-line-no-width, 3ch);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: end;
+  content: counter(textpreview-line);
+  user-select: none;
 }
 
 .lineTarget {
