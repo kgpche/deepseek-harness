@@ -95,6 +95,26 @@ export interface OpenContentIntent {
   readonly revealIfOpened?: boolean
   /** Open into the target pane's preview slot, reusing its existing preview tab in place. */
   readonly preview?: boolean
+  /** Width of the pane a `preferNewPane` split divides, in CSS pixels; sizes the split's halves. */
+  readonly paneWidthPx?: number
+}
+
+/** Width a page-originated split aims to leave the page pane with, in CSS pixels. */
+const PAGE_SPLIT_TARGET_PX = 240
+
+/** Bounds on the page pane's share of a page-originated split. */
+const PAGE_SPLIT_SHARE = { min: 0.25, max: 0.45 } as const
+
+/**
+ * Default sizes for a page-originated split: the page pane keeps a working
+ * fixed width (a file tree's rows stay readable) and the new content pane
+ * takes the remainder, whatever the column's width.
+ * @param paneWidthPx - the split pane's measured width.
+ * @returns two fractions summing to 1, the page pane's first.
+ */
+export function pageSplitSizes(paneWidthPx: number): [number, number] {
+  const share = Math.min(PAGE_SPLIT_SHARE.max, Math.max(PAGE_SPLIT_SHARE.min, PAGE_SPLIT_TARGET_PX / paneWidthPx))
+  return [share, 1 - share]
 }
 
 /** A mint that counts, so the surface can carry its position forward. */
@@ -362,6 +382,15 @@ export function createSidebarRightStore(
                 ...page || intent.preview === undefined ? {} : { preview: intent.preview },
               })
           ops.push(...planned.ops)
+          // A page pane that measures itself sizes its split: the page keeps a
+          // working width and the content takes the rest, instead of the kit's
+          // equal halves. Only the one-docked-pane split creates the fresh split
+          // node the resize names; a wider dock routes without splitting.
+          const splitOp = split[0]
+          if (intent.paneWidthPx !== undefined && intent.paneWidthPx > 0 && splitOp?.type === 'split'
+            && dockPaneIds(state).length < 2) {
+            ops.push(...planResizeSplit(splitOp.newSplitId, pageSplitSizes(intent.paneWidthPx)))
+          }
           if (replace !== undefined && replace !== planned.tabId) ops.push({ type: 'closeTab', tabId: replace })
           settled(planned.tabId)
           return ops

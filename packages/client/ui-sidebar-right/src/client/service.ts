@@ -164,6 +164,8 @@ export interface SidebarRightPlacement {
   readonly preview?: boolean
   /** Set by the Tab domain: the caller is a page tab landing in its own pane by default. */
   readonly fromPageTab?: boolean
+  /** Width of the pane the open would split, in CSS pixels; sizes the split's halves. */
+  readonly paneWidthPx?: number
 }
 
 /** How a caller wants a resource opened. */
@@ -466,6 +468,7 @@ export class SidebarRightController implements ISidebarRight {
       ...placement.replaceTab === undefined ? {} : { replaceTab: placement.replaceTab },
       ...placement.revealIfOpened === undefined ? {} : { revealIfOpened: placement.revealIfOpened },
       ...placement.preview === undefined ? {} : { preview: placement.preview },
+      ...placement.paneWidthPx === undefined ? {} : { paneWidthPx: placement.paneWidthPx },
     }, (tabId) => { this.tabDomain.navigate(sessionId, tabId, { address, params }) }) }
     const replaced = placement.replaceTab === undefined ? undefined : layout?.tabs[placement.replaceTab]
     const replacementPane = replaced === undefined || layout === undefined ? undefined : findTabPane(layout, replaced.id)

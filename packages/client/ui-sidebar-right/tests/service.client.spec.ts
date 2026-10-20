@@ -209,6 +209,29 @@ describe('SidebarRightController — opening', () => {
     expect(findTabPane(layout(), tabOf('b.txt')).id).toBe(pane.id)
   })
 
+  it('sizes a caller-measured split so the caller pane keeps a working width, clamped at both ends', () => {
+    const { controller, instance, publish, layout, expand } = harness()
+    expand()
+    publish()
+    const sizes = (): readonly number[] => {
+      const split = Object.values(layout().nodes).find(node => node.kind === 'split')
+      return split !== undefined && split.kind === 'split' ? split.sizes : []
+    }
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true, paneWidthPx: 576 })
+    expect(sizes()).toEqual([240 / 576, 1 - 240 / 576])
+    // Undo covers the resize and the split as one entry; each re-open splits afresh.
+    instance.actions.undo(SESSION)
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true, paneWidthPx: 400 })
+    expect(sizes()).toEqual([0.45, 1 - 0.45])
+    instance.actions.undo(SESSION)
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true, paneWidthPx: 2000 })
+    expect(sizes()).toEqual([0.25, 0.75])
+    // Without a measurement the kit's equal halves stand.
+    instance.actions.undo(SESSION)
+    controller.openResource('dsh-resource://file/session/s-test/a.txt', { preferNewPane: true })
+    expect(sizes()).toEqual([0.5, 0.5])
+  })
+
   it('falls back when the pane is too narrow and reveals existing content without splitting', () => {
     const { controller, publish, layout, tabOf, room, expand } = harness()
     expand()

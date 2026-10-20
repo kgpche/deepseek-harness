@@ -193,6 +193,7 @@ export class TabDomain {
       ...placement.preferNewPane === undefined ? {} : { preferNewPane: placement.preferNewPane },
       ...placement.revealIfOpened === undefined ? {} : { revealIfOpened: placement.revealIfOpened },
       ...placement.preview === undefined ? {} : { preview: placement.preview },
+      ...placement.paneWidthPx === undefined ? {} : { paneWidthPx: placement.paneWidthPx },
       // The caller is a page tab landing in its own pane by default: the service
       // reroutes this beside the page instead. An explicitly named pane skips it.
       ...(placement.paneId === undefined && held.paneId !== undefined

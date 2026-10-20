@@ -208,7 +208,14 @@ export function FilesBody({
     // Every row is under the tree's root, so its address is session-relative.
     addressOf: path => fileAddressFor(sessionId, state.root, path),
     onOpen: (path, pinned) => {
-      tabActions.openResource(fileAddressFor(sessionId, state.root, path), { preview: !pinned })
+      // The pane this tree fills is the pane the open splits; its width sizes
+      // the split, read at click time because the user may have dragged the
+      // column since the last render. Unmeasurable (zero) leaves the default.
+      const paneWidthPx = bodyRef.current?.clientWidth ?? 0
+      tabActions.openResource(fileAddressFor(sessionId, state.root, path), {
+        preview: !pinned,
+        ...(paneWidthPx > 0 ? { paneWidthPx } : {}),
+      })
     },
     activeAddress: activeResource(),
     t,

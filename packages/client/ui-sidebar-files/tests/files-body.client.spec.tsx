@@ -174,6 +174,16 @@ describe('FilesBody', () => {
     expect(tabActions.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/s-test/README.md', { preview: false })
   })
 
+  it('a click measures its pane and reports the width so the split is sized', async () => {
+    const { view, script, tabActions } = mountBody()
+    await act(() => script.watches.ready(ROOT))
+    await act(() => script.settle({ ok: true, value: ROOT_LEVEL }))
+    // jsdom lays nothing out, so the body reports no width until the test stands one in.
+    Object.defineProperty(view.container.querySelector('[data-files-body]')!, 'clientWidth', { value: 576, configurable: true })
+    fireEvent.click(view.container.querySelector(`[data-files-path="${ROOT}/README.md"] > button`)!)
+    expect(tabActions.openResource).toHaveBeenCalledWith('dsh-resource://file/session/s-test/README.md', { preview: true, paneWidthPx: 576 })
+  })
+
   it('marks the row of the file the viewer pane shows', async () => {
     const active = fileAddressFor(SESSION, ROOT, `${ROOT}/README.md`)
     const { view, script } = mountBody(ROOT, undefined, active)

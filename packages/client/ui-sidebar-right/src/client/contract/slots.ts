@@ -130,6 +130,8 @@ export interface SidebarRightTabPlacement {
   readonly replaceTab?: boolean
   /** `true` opens as the target pane's preview slot: the pane's existing preview tab is reused in place. */
   readonly preview?: boolean
+  /** Width of the pane the open would split, in CSS pixels; sizes the split's halves. */
+  readonly paneWidthPx?: number
 }
 
 /** Page-owned operations registered for a mounted tab body. */
