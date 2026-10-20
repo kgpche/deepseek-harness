@@ -1,10 +1,11 @@
 /**
- * Client-drawn window controls for the frameless Linux window. Windows uses the
- * native overlay controls and macOS the inset traffic lights; Linux's hidden
- * title bar leaves nothing, so this cluster rides the top-right corner over
- * the chrome rows that already drag the window. The preload marks the document
- * root's platform, which is exactly the desktop case — a plain browser page
- * has no `data-platform` and shows nothing.
+ * Client-drawn window controls for the frameless Linux window, as macOS
+ * traffic lights: red closes, yellow minimizes, green maximizes. Windows uses
+ * the native overlay controls and macOS the real traffic lights; Linux's
+ * hidden title bar leaves nothing, so this trio sits in the sidebar logo
+ * row's empty top band, moving nothing. The preload marks the document root's
+ * platform, which is exactly the desktop case — a plain browser page has no
+ * `data-platform` and shows nothing.
  */
 import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
@@ -26,32 +27,12 @@ export interface WindowControlsProps {
   readonly t: TranslateNS<'common'>
 }
 
-/** @param props - common copy. @returns the three window controls, or nothing off the Linux desktop. */
+/** @param props - common copy. @returns the three traffic lights, or nothing off the Linux desktop. */
 export function WindowControls({ t }: WindowControlsProps): ReactNode {
   const desktop = bridge()
   if (document.documentElement.dataset.platform !== 'linux' || desktop === undefined) return null
   return (
     <div className={css.windowControls} data-shell-window-controls>
-      <button
-        type="button"
-        className={css.windowButton}
-        aria-label={t('window.minimize')}
-        title={t('window.minimize')}
-        data-window-control="minimize"
-        onClick={() => { void desktop.minimize() }}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor" strokeWidth="1.2" /></svg>
-      </button>
-      <button
-        type="button"
-        className={css.windowButton}
-        aria-label={t('window.maximize')}
-        title={t('window.maximize')}
-        data-window-control="maximize"
-        onClick={() => { void desktop.toggleMaximize() }}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.2" /></svg>
-      </button>
       <button
         type="button"
         className={`${css.windowButton} ${css.windowClose}`}
@@ -60,7 +41,27 @@ export function WindowControls({ t }: WindowControlsProps): ReactNode {
         data-window-control="close"
         onClick={() => { void desktop.close() }}
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1.2" /></svg>
+        <span className={css.windowGlyph} aria-hidden="true">✕</span>
+      </button>
+      <button
+        type="button"
+        className={`${css.windowButton} ${css.windowMinimize}`}
+        aria-label={t('window.minimize')}
+        title={t('window.minimize')}
+        data-window-control="minimize"
+        onClick={() => { void desktop.minimize() }}
+      >
+        <span className={css.windowGlyph} aria-hidden="true">─</span>
+      </button>
+      <button
+        type="button"
+        className={`${css.windowButton} ${css.windowMaximize}`}
+        aria-label={t('window.maximize')}
+        title={t('window.maximize')}
+        data-window-control="maximize"
+        onClick={() => { void desktop.toggleMaximize() }}
+      >
+        <span className={css.windowGlyph} aria-hidden="true">⤢</span>
       </button>
     </div>
   )

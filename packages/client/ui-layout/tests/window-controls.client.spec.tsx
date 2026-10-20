@@ -33,16 +33,16 @@ describe('WindowControls', () => {
     document.documentElement.dataset.platform = 'linux'
     const linux = render(<WindowControls t={t} />)
     const buttons = [...linux.container.querySelectorAll('[data-window-control]')]
-    expect(buttons.map(button => button.getAttribute('aria-label'))).toEqual(['window.minimize', 'window.maximize', 'close'])
+    expect(buttons.map(button => button.getAttribute('aria-label'))).toEqual(['close', 'window.minimize', 'window.maximize'])
   })
 
   it('routes each control to its bridge call', () => {
     Object.assign(window, desktop)
     document.documentElement.dataset.platform = 'linux'
     const view = render(<WindowControls t={key => key} />)
-    for (const control of ['minimize', 'maximize', 'close'] as const) {
+    for (const control of ['close', 'minimize', 'maximize'] as const) {
       fireEvent.click(view.container.querySelector(`[data-window-control="${control}"]`)!)
     }
-    expect(calls).toEqual(['minimize', 'toggleMaximize', 'close'])
+    expect(calls).toEqual(['close', 'minimize', 'toggleMaximize'])
   })
 })

@@ -10,7 +10,7 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
     style=""
   >
     <div
-      class="dshSidebarLogoRow logoRow"
+      class="logoRow"
       data-window-drag="true"
     >
       <button
@@ -101,7 +101,7 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
     style="width: 300px;"
   >
     <div
-      class="dshSidebarLogoRow logoRow"
+      class="logoRow"
       data-window-drag="true"
     >
       <button
@@ -244,7 +244,7 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
     style=""
   >
     <div
-      class="dshSidebarLogoRow logoRow"
+      class="logoRow"
       data-window-drag="true"
     >
       <button
@@ -353,7 +353,7 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
     style="width: 300px;"
   >
     <div
-      class="dshSidebarLogoRow logoRow"
+      class="logoRow"
       data-window-drag="true"
     >
       <button
@@ -496,7 +496,7 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
     style="width: 300px;"
   >
     <div
-      class="dshSidebarLogoRow logoRow"
+      class="logoRow"
       data-window-drag="true"
     >
       <button
