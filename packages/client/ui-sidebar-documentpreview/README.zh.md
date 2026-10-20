@@ -129,7 +129,7 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 <a id="find"></a>
 ## 查找
 
-`document.find` 命令（桌面 profile 为 `primary+KeyF`，web:macos 与 web:windows 为 `primary+alt+KeyF`——web 无法注册浏览器保留的裸 `primary+KeyF` 默认键；web:linux 不容许这些组合，改用可注册的 `primary+shift+Period`）在持有焦点的 `text-pages` 正文上打开 VSCode 式查找栏；其他模式或未持有焦点的正文不响应。输入防抖 200 ms 后调用 Host 的 `find`（默认字面量、忽略大小写）；栏上的开关与 `Alt+C`/`Alt+R` 立即按区分大小写或正则重新运行。`Enter` 下一个、`Shift+Enter` 上一个并回绕；`Escape` 关闭。计数显示 `当前 / 总数`，Host 结果上限截断时带 `+`，失败的运行在旁边提示。纯文本正文在行内精确标记匹配片段，当前匹配最强；代码正文整行标记（shiki 拥有行内 token）。跳到未加载页的匹配会像行导航一样先补页再落点，落点被记住，无关写入不会重复滚动。任何编辑、切换、重新载入或文件版本变化都会淘汰结果；查询保留待重跑，栏已离开的请求的响应会被丢弃。
+`document.find` 命令（桌面 profile 为 `primary+KeyF`，web:macos 与 web:windows 为 `primary+alt+KeyF`——web 无法注册浏览器保留的裸 `primary+KeyF` 默认键；web:linux 不容许这些组合，改用可注册的 `primary+shift+Period`）在持有焦点的 `text-pages` 正文上打开 VSCode 式查找栏；其他模式或未持有焦点的正文不响应。 头部的搜索控件无需任何焦点即可打开同一查找栏——快捷键之外的可发现入口。输入防抖 200 ms 后调用 Host 的 `find`（默认字面量、忽略大小写）；栏上的开关与 `Alt+C`/`Alt+R` 立即按区分大小写或正则重新运行。`Enter` 下一个、`Shift+Enter` 上一个并回绕；`Escape` 关闭。计数显示 `当前 / 总数`，Host 结果上限截断时带 `+`，失败的运行在旁边提示。纯文本正文在行内精确标记匹配片段，当前匹配最强；代码正文整行标记（shiki 拥有行内 token）。跳到未加载页的匹配会像行导航一样先补页再落点，落点被记住，无关写入不会重复滚动。任何编辑、切换、重新载入或文件版本变化都会淘汰结果；查询保留待重跑，栏已离开的请求的响应会被丢弃。
 
 <a id="model-experience"></a>
 ## 模型体验

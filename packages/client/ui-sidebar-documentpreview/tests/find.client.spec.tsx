@@ -65,6 +65,15 @@ async function mounted() {
 }
 
 describe('the find bar', () => {
+  it('opens from the toolbar search control without body focus', async () => {
+    const { view } = await mounted()
+    // No focus anywhere in the body: the button is the shortcut-independent way in.
+    await act(async () => { fireEvent.click(view.container.querySelector('[data-textpreview-tool="find"]')!) })
+    const input = view.container.querySelector('[data-textpreview-find-input]') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(document.activeElement).toBe(input)
+  })
+
   it('opens on the command request in the body holding focus and closes on Escape', async () => {
     const { view, open } = await mounted()
     const input = open()

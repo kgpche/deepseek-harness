@@ -16,7 +16,7 @@ import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   FileTypeIcon, IconNowrapFillRegular, IconPauseOutlineRegular, IconPlayOutlineRegular,
-  IconRefreshOutlineRegular, IconWrapFillRegular, Menu, PathLabel, Tooltip, classifyFileType,
+  IconRefreshOutlineRegular, IconSearchOutlineRegular, IconWrapFillRegular, Menu, PathLabel, Tooltip, classifyFileType,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { TextInjected } from './face.ts'
@@ -361,6 +361,25 @@ export function TextPreview({
               onClick={() => { actions.toggledWrap(tab.id) }}
             >
               {state.wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
+            </button>
+          </Tooltip>
+        )}
+        {mode === 'text-pages' && (
+          // The find bar's one visible affordance: the shortcut needs focus in
+          // the body and a non-browser binding, so the toolbar names it too.
+          <Tooltip label={t('find.command')} side="bottom" delayMs={500}>
+            <button
+              type="button"
+              className={css.tool}
+              aria-label={t('find.aria')}
+              aria-expanded={state.findOpen}
+              data-textpreview-tool="find"
+              onClick={() => {
+                actions.findOpened(tab.id)
+                setFindFocus(value => value + 1)
+              }}
+            >
+              <IconSearchOutlineRegular />
             </button>
           </Tooltip>
         )}
