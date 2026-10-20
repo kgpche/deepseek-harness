@@ -174,7 +174,7 @@ pnpm run package:desktop:mac:x64:unsigned
 pnpm run package:desktop:linux:x64:unsigned
 ```
 
-该命令无需 `.env` 文件或签名配置；与未签名 macOS 构建一样使用本地默认值，包括 `com.deepseek.harness` 应用 ID。该目标不存在签名构建、发布记录或更新源，因此打包入口在缺少 `--unsigned` 时直接拒绝。产物位于 `apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/`，文件名为 `deepseek-harness-<version>-linux-amd64-unsigned.deb` 与 `deepseek-harness-<version>-linux-x86_64-unsigned.AppImage`，使用发行版的架构命名；构建成功后打印 `DEB:` 及其绝对路径。使用 `sudo apt install <deb 文件路径>` 安装，或用 `dpkg-deb -I` 与 `dpkg-deb -c` 检查 control 字段和文件列表。打包过程需要访问 npm、GitHub release 资产和 nodejs.org 以下载 Electron 与主运行时；准备阶段和组装后的应用仍执行运行时完整性与冒烟检查。Linux 应用使用 `resources/runtime/primary-runtime` 中的独立 Node 运行打包的 dsh 树，而不是 Electron 的 Node 模式，因为 Electron 可执行文件会加载 GTK 链接库，导致 sharp 等依赖 glib 的原生模块崩溃（[electron#46323](https://github.com/electron/electron/issues/46323)）；安装的 Electron 二进制仍然只负责桌面外壳本身。
+该命令无需 `.env` 文件或签名配置；与未签名 macOS 构建一样使用本地默认值，包括 `com.deepseek.harness` 应用 ID。该目标不存在签名构建、发布记录或更新源，因此打包入口在缺少 `--unsigned` 时直接拒绝。产物位于 `apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/`，文件名为 `deepseek-harness-<version>-linux-amd64-unsigned.deb` 与 `deepseek-harness-<version>-linux-x86_64-unsigned.AppImage`，使用发行版的架构命名；构建成功后打印 `DEB:` 及其绝对路径。使用 `sudo apt install <deb 文件路径>` 安装，或用 `dpkg-deb -I` 与 `dpkg-deb -c` 检查 control 字段和文件列表。打包过程需要访问 npm、GitHub release 资产和 nodejs.org 以下载 Electron 与主运行时；准备阶段和组装后的应用仍执行运行时完整性与冒烟检查。Linux 应用使用 `resources/runtime/primary-runtime` 中的独立 Node 运行打包的 dsh 树，而不是 Electron 的 Node 模式，因为 Electron 可执行文件会加载 GTK 链接库，导致 sharp 等依赖 glib 的原生模块崩溃（[electron#46323](https://github.com/electron/electron/issues/46323)）；安装的 Electron 二进制仍然只负责桌面外壳本身。Linux 应用在窗口关闭时退出——没有托盘或 Dock 图标可以再次唤起隐藏的实例——运行中任务的确认框取消后回到可见窗口。
 
 <a id="macos-release-signing"></a>
 

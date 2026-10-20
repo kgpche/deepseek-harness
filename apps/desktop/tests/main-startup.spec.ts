@@ -1303,6 +1303,36 @@ describe('desktop main startup', () => {
     expect(window.hide).not.toHaveBeenCalled()
   })
 
+  it('quits on window close on Linux, where no tray or Dock can reach a hidden instance', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    window.close()
+    await vi.advanceTimersByTimeAsync(0)
+    // Nothing to interrupt: the quit proceeds without a dialog or a hidden leftover.
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(window.hide).toHaveBeenCalledOnce()
+    await host.stopping.promise
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+  })
+
+  it('restores the window when a Linux close confirmation with running tasks is cancelled', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    window.show.mockClear()
+    host.inspectQuit.mockResolvedValue({ activeTasks: true, scheduledTasks: false })
+    window.close()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledOnce()
+    expect(window.hide).not.toHaveBeenCalled()
+    expect(window.show).toHaveBeenCalledOnce()
+    expect(host.stop).not.toHaveBeenCalled()
+    // The teardown quit must pass its own silent inspection.
+    host.inspectQuit.mockResolvedValue({ activeTasks: false, scheduledTasks: false })
+  })
+
   it('leaves macOS fullscreen before hiding on close and reopens the hidden window on activate', async () => {
     vi.stubGlobal('process', { ...process, platform: 'darwin', arch: 'arm64', resourcesPath: 'desktop-test-resources' })
     await readyWorkspace()

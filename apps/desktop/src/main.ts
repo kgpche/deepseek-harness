@@ -1084,6 +1084,19 @@ async function main(): Promise<void> {
       if (quitting || shellInstallerOwnsQuit || sessionEnding) return
       event.preventDefault()
       if (updateDialog.isOpen) { updateDialog.focus(); return }
+      // Linux has no tray or Dock icon to reach a hidden instance again, so closing the window quits;
+      // cancelling a task confirmation restores the window instead of leaving it hidden.
+      if (process.platform === 'linux') {
+        void quitConfirmation.confirm().then((approved) => {
+          if (quitting || shellInstallerOwnsQuit) return
+          if (approved) { finishQuit(); return }
+          if (!window.isDestroyed()) window.show()
+        }).catch((error: unknown) => {
+          console.error(error)
+          if (!quitting && !shellInstallerOwnsQuit) finishQuit()
+        })
+        return
+      }
       const hide = (): void => {
         if (!quitting && !shellInstallerOwnsQuit && !sessionEnding && !window.isDestroyed()) hideMainWindow(window)
       }
