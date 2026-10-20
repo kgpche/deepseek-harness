@@ -95,8 +95,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # The fork account's macOS runners never provision (jobs sit assigned and
+  # get cancelled without a step); the release still publishes whatever
+  # installers succeeded, so Linux and Windows ship without macOS.
   release:
     needs: package
+    if: ${{ !cancelled() && needs.package.result != 'skipped' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
