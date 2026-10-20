@@ -295,7 +295,7 @@
 .windowControls {
   position: fixed;
   top: 0;
-  right: 0;
+  left: 0;
   z-index: 4;
   display: flex;
   align-items: stretch;
@@ -322,4 +322,10 @@
 .windowClose:hover {
   background: var(--dsw-alias-danger, #e2483d);
   color: #fff;
+}
+
+/* Linux frameless: the floating window controls own the frame's top-left
+   corner, so the sidebar's logo row steps right of them. */
+:global(html[data-platform='linux']) :global(.dshSidebarLogoRow) {
+  padding-inline-start: 118px;
 }
