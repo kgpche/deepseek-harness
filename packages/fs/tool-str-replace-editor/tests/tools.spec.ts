@@ -300,6 +300,18 @@ describe('tool-str-replace-editor', () => {
     expect(await readFile(sample, 'utf8')).toBe(`before ${replacement} after`)
   })
 
+  it('refuses a UTF-16 file instead of re-encoding it on write-back', async () => {
+    const { ctx, root, owner } = await setup()
+    const sample = join(root, 'u16.env')
+    const bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('API=1\n', 'utf16le')])
+    await writeFile(sample, bytes)
+    const result = await call(ctx, owner, { command: 'str_replace', path: sample, old_str: 'API', new_str: 'BASE' })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('binary file')
+    // The untouched bytes stay in their original encoding.
+    expect(await readFile(sample)).toEqual(bytes)
+  })
+
   it('lists visible entries to depth two and clips at the configured view limit', async () => {
     const { ctx, root, owner } = await setup({ maxOutputChars: 10_000 })
     await mkdir(join(root, 'dir', 'nested', 'third'), { recursive: true })

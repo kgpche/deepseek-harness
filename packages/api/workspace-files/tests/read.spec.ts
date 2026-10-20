@@ -219,6 +219,30 @@ describe('workspaceFiles.read — gate 4: text only', () => {
     expect(failure.code).toBe('workspace-file/not-text')
   })
 
+  it('reads a byte-order-marked file as text: the mark names the encoding and drops', async () => {
+    await writeFile(join(workspace, 'u8.env'), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('API=1\n', 'utf8')]))
+    const be = Buffer.from('KEY=值\n', 'utf16le')
+    be.swap16()
+    await writeFile(join(workspace, 'u16le.env'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('KEY=值\n', 'utf16le')]))
+    await writeFile(join(workspace, 'u16be.env'), Buffer.concat([Buffer.from([0xfe, 0xff]), be]))
+    const u8 = await endpoint().read(harness.scope, 'u8.env', {}, signal())
+    expect(u8.text).toBe('API=1')
+    for (const name of ['u16le.env', 'u16be.env']) {
+      const page = await endpoint().read(harness.scope, name, {}, signal())
+      expect(page.text).toBe('KEY=值')
+      // The stat still counts the file's encoded bytes, mark included.
+      expect(page.bytes).toBe(2 + 'KEY=值\n'.length * 2)
+      expect(page.eof).toBe(true)
+    }
+  })
+
+  it('refuses a truncated UTF-16 body and a UTF-32 mark', async () => {
+    await writeFile(join(workspace, 'odd.env'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from([0x41])]))
+    expect((await failureOf(endpoint().read(harness.scope, 'odd.env', {}, signal()))).code).toBe('workspace-file/not-text')
+    await writeFile(join(workspace, 'u32.env'), Buffer.from([0xff, 0xfe, 0x00, 0x00]))
+    expect((await failureOf(endpoint().read(harness.scope, 'u32.env', {}, signal()))).code).toBe('workspace-file/not-text')
+  })
+
   it('rejects a page that carries NUL bytes, wherever in the file the page lies', async () => {
     await writeFile(join(workspace, 'nul.dat'), Buffer.from([0x61, 0x00, 0x62]))
     const service = endpoint()

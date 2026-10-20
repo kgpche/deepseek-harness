@@ -197,7 +197,9 @@ export abstract class FileSystem extends Service {
   abstract lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined>
 
   /**
-   * Read the whole regular text file as a single decoded string.
+   * Read the whole regular UTF-8 text file as a single decoded string, strict
+   * UTF-8: consumers edit and copy what this returns, so a file in another
+   * encoding refuses instead of coming back re-encoded on write-back.
    * @param target - the resolved target to read.
    * @param signal - aborts the read.
    * @returns the full decoded UTF-8 content.
@@ -205,13 +207,14 @@ export abstract class FileSystem extends Service {
   abstract readText(target: FsTarget, signal?: AbortSignal): Promise<string>
 
   /**
-   * Stream the whole regular text file as decoded text chunks (same text
-   * semantics as {@link readText}, for large files). The backend owns
-   * cross-chunk UTF-8 decoding and binary rejection so the policy layer never
-   * touches raw bytes.
+   * Stream the whole regular text file as decoded text chunks for display. A
+   * byte order mark names the encoding (UTF-8, UTF-16 LE, UTF-16 BE) and is
+   * dropped from the decoded text; without one the bytes decode as strict
+   * UTF-8. The backend owns cross-chunk decoding, marks, and binary rejection
+   * so the policy layer never touches raw bytes.
    * @param target - the resolved target to read.
    * @param signal - aborts the stream, including between chunks.
-   * @returns the chunk iterable, decoded and validated like {@link readText}.
+   * @returns the chunk iterable, decoded for display.
    */
   abstract streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>
 

@@ -340,12 +340,65 @@ export async function listDirectory(target: LocalTarget, signal?: AbortSignal): 
 // --- Reading ---
 
 function notTextError(verb: 'read' | 'edit', displayPath: string): FsError {
-  return new FsError(`cannot ${verb} "${displayPath}": invalid UTF-8 text`, 'FS_NOT_TEXT')
+  return new FsError(`cannot ${verb} "${displayPath}": invalid text encoding`, 'FS_NOT_TEXT')
 }
 
-function decodeUtf8(buffer: Uint8Array, verb: 'read' | 'edit', displayPath: string): string {
+/** Bytes a byte order mark needs before every supported mark can be ruled out. */
+const BOM_SNIFF_BYTES = 4
+
+/** A decided reading of a file's leading bytes. */
+export type TextDeclaration =
+  | {
+    readonly kind: 'text'
+    /** WHATWG decoder label for the body that follows the mark. */
+    readonly encoding: 'utf-8' | 'utf-16le' | 'utf-16be'
+    /** Bytes the mark occupies; the decoded text starts after them. */
+    readonly bomBytes: number
+    /** Whether the encoding legitimately carries NUL code units in plain text. */
+    readonly nulInText: boolean
+  }
+  | { readonly kind: 'utf32le' }
+  | { readonly kind: 'undecided' }
+
+/**
+ * The encoding a file's leading bytes declare. A byte order mark is
+ * authoritative: it names the encoding and its body decodes by it alone, and a
+ * UTF-16 mark suspends the NUL binary sample because its ASCII text carries
+ * NUL high bytes. No mark means UTF-8 with the NUL sample, exactly as before,
+ * so unmarked bytes never change meaning.
+ * @param prefix - the file's leading bytes, however few have arrived.
+ * @param final - whether `prefix` is the whole file.
+ * @returns the declaration, or `undecided` while fewer bytes than a remaining
+ *   mark needs have arrived and more may still come.
+ */
+export function textDeclaration(prefix: Uint8Array, final: boolean): TextDeclaration {
+  const at = (index: number): number | undefined => index < prefix.length ? prefix[index] : undefined
+  if (at(0) === 0xef && at(1) === 0xbb && at(2) === 0xbf) return { kind: 'text', encoding: 'utf-8', bomBytes: 3, nulInText: false }
+  if (at(0) === 0xff && at(1) === 0xfe) {
+    // FF FE 00 00 is UTF-32LE, whose body this reader cannot decode.
+    if (at(2) === 0 && at(3) === 0) return { kind: 'utf32le' }
+    return { kind: 'text', encoding: 'utf-16le', bomBytes: 2, nulInText: true }
+  }
+  if (at(0) === 0xfe && at(1) === 0xff) return { kind: 'text', encoding: 'utf-16be', bomBytes: 2, nulInText: true }
+  // A shorter prefix may still grow into a mark; a final one cannot.
+  if (!final && prefix.length < BOM_SNIFF_BYTES
+    && (at(0) === undefined || at(0) === 0xef || at(0) === 0xff || at(0) === 0xfe)) return { kind: 'undecided' }
+  return { kind: 'text', encoding: 'utf-8', bomBytes: 0, nulInText: false }
+}
+
+/** Refuse the one declared encoding no decoder here reads. */
+function unsupportedUtf32(displayPath: string): FsError {
+  return new FsError(`cannot read "${displayPath}": UTF-32 text is not supported`, 'FS_NOT_TEXT')
+}
+
+function decodeChunk(
+  decoder: TextDecoder,
+  chunk: Uint8Array | undefined,
+  verb: 'read',
+  displayPath: string,
+): string {
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    return chunk ? decoder.decode(chunk, { stream: true }) : decoder.decode()
   } catch (error: unknown) {
     /* v8 ignore next 2 -- TextDecoder({fatal}) only throws TypeError on invalid bytes; any other throw is an unreachable runtime fault. */
     if (!(error instanceof TypeError)) throw error
@@ -353,14 +406,17 @@ function decodeUtf8(buffer: Uint8Array, verb: 'read' | 'edit', displayPath: stri
   }
 }
 
-function decodeUtf8Stream(
-  decoder: TextDecoder,
-  chunk: Uint8Array | undefined,
-  verb: 'read' | 'edit',
-  displayPath: string,
-): string {
+/**
+ * Decode a whole buffer as strict UTF-8 for {@link readWholeText} and the edit
+ * path, whose consumers write back: a declared non-UTF-8 body must refuse
+ * rather than risk re-encoding on write-back.
+ * @param buffer - the file's bytes as last read.
+ * @param displayPath - path the error names.
+ * @returns the decoded text, byte-for-byte (no normalization).
+ */
+function decodeUtf8(buffer: Uint8Array, verb: 'read' | 'edit', displayPath: string): string {
   try {
-    return chunk ? decoder.decode(chunk, { stream: true }) : decoder.decode()
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer)
   } catch (error: unknown) {
     /* v8 ignore next 2 -- TextDecoder({fatal}) only throws TypeError on invalid bytes; any other throw is an unreachable runtime fault. */
     if (!(error instanceof TypeError)) throw error
@@ -384,7 +440,9 @@ async function statRegularFile(target: LocalTarget, verb: 'read', signal?: Abort
 
 /**
  * Read a whole regular UTF-8 text file into a single decoded string. Rejects
- * non-regular files, invalid UTF-8, and NUL-byte binary samples.
+ * non-regular files, invalid UTF-8, and NUL-byte binary samples. Unlike
+ * {@link streamWholeText} this stays strict UTF-8: its consumers edit and copy
+ * what they read, and a byte order mark's text must not come back re-encoded.
  * @param target - the resolved file to read.
  * @param signal - aborts the read (`FS_ABORTED`).
  * @returns the full decoded text, byte-for-byte (no normalization).
@@ -482,9 +540,10 @@ export async function readByteWindow(
 }
 
 /**
- * Stream a whole regular UTF-8 text file as decoded text chunks. Same text
- * semantics as {@link readWholeText} (regular-file check, binary/NUL rejection,
- * cross-chunk UTF-8 decoding), but never holds the whole file in memory.
+ * Stream a whole regular text file as decoded text chunks. Same text semantics
+ * as {@link readWholeText} (regular-file check, byte order mark decoding,
+ * binary/NUL rejection, cross-chunk decoding), but never holds the whole file
+ * in memory.
  * @param target - the resolved file to stream.
  * @param signal - aborts the stream, including between chunks (`FS_ABORTED`).
  * @returns decoded text chunks in file order; chunk boundaries carry no meaning.
@@ -492,24 +551,53 @@ export async function readByteWindow(
 export async function* streamWholeText(target: LocalTarget, signal?: AbortSignal): AsyncIterable<string> {
   await statRegularFile(target, 'read', signal)
   const stream = createReadStream(target.targetKey, signal ? { signal } : {})
-  const decoder = new TextDecoder('utf-8', { fatal: true })
+  const chunks = (stream as AsyncIterable<Buffer>)[Symbol.asyncIterator]()
   let sampledBytes = 0
 
-  function scanBinarySample(chunk: Buffer): void {
-    if (sampledBytes >= BINARY_SAMPLE_BYTES) return
-    const sample = chunk.subarray(0, Math.min(chunk.length, BINARY_SAMPLE_BYTES - sampledBytes))
-    if (sample.includes(0)) {
-      throw new FsError(`cannot read "${target.displayPath}": binary file`, 'FS_NOT_TEXT')
-    }
-    sampledBytes += sample.length
-  }
-
   try {
-    for await (const chunk of stream as AsyncIterable<Buffer>) {
-      scanBinarySample(chunk)
-      yield decodeUtf8Stream(decoder, chunk, 'read', target.displayPath)
+    // Hold the first bytes back until every supported mark can be ruled out; a
+    // shorter file declares itself at its end. The held prefix is one small
+    // buffer, re-emitted as the first decoded chunk.
+    const held: Buffer[] = []
+    let heldBytes = 0
+    let done = false
+    while (heldBytes < BOM_SNIFF_BYTES) {
+      const next = await chunks.next()
+      if (next.done) { done = true; break }
+      held.push(next.value)
+      heldBytes += next.value.length
     }
-    yield decodeUtf8Stream(decoder, undefined, 'read', target.displayPath)
+    const declaration = textDeclaration(Buffer.concat(held), done)
+    if (declaration.kind === 'utf32le') throw unsupportedUtf32(target.displayPath)
+    if (declaration.kind === 'undecided') throw new Error('fsio: a sniffed declaration is always decided')
+    const body = heldBytes === 0 ? [] : [Buffer.concat(held).subarray(declaration.bomBytes)]
+    const decoder = new TextDecoder(declaration.encoding, { fatal: true })
+    // A UTF-16 mark suspends the sample: its plain text legitimately carries
+    // NUL code units, so the boolean is captured before the closure below.
+    const nulInText = declaration.nulInText
+
+    function scanBinarySample(chunk: Buffer): void {
+      if (nulInText) return
+      if (sampledBytes >= BINARY_SAMPLE_BYTES) return
+      const sample = chunk.subarray(0, Math.min(chunk.length, BINARY_SAMPLE_BYTES - sampledBytes))
+      if (sample.includes(0)) {
+        throw new FsError(`cannot read "${target.displayPath}": binary file`, 'FS_NOT_TEXT')
+      }
+      sampledBytes += sample.length
+    }
+
+    for (const chunk of body) {
+      if (chunk.length === 0) continue
+      scanBinarySample(chunk)
+      yield decodeChunk(decoder, chunk, 'read', target.displayPath)
+    }
+    while (!done) {
+      const next = await chunks.next()
+      if (next.done) { done = true; break }
+      scanBinarySample(next.value)
+      yield decodeChunk(decoder, next.value, 'read', target.displayPath)
+    }
+    yield decodeChunk(decoder, undefined, 'read', target.displayPath)
   } catch (error: unknown) {
     /* v8 ignore next 4 -- mid-stream errors need an abort/IO fault racing the loop; pre-abort is caught by throwIfAborted. */
     if (isAbortError(error)) throw new FsError('read aborted', 'FS_ABORTED')

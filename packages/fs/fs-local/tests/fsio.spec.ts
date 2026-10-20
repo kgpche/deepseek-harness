@@ -21,6 +21,7 @@ import {
   resolveLocalTarget,
   restoreLineEndings,
   streamWholeText,
+  textDeclaration,
   writeFileAtomic,
 } from '../src/fsio.ts'
 import type { LocalTarget } from '../src/fsio.ts'
@@ -690,6 +691,70 @@ describe('streamWholeText', () => {
       }
     }
     await expect(run()).rejects.toMatchObject({ code: 'FS_ABORTED' })
+  })
+})
+
+describe('byte order marks', () => {
+  const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf])
+  const UTF16LE_BOM = Buffer.from([0xff, 0xfe])
+  const UTF16BE_BOM = Buffer.from([0xfe, 0xff])
+
+  it('declares from partial prefixes and never changes unmarked bytes', () => {
+    expect(textDeclaration(UTF8_BOM, true)).toEqual({ kind: 'text', encoding: 'utf-8', bomBytes: 3, nulInText: false })
+    expect(textDeclaration(UTF16LE_BOM, true)).toEqual({ kind: 'text', encoding: 'utf-16le', bomBytes: 2, nulInText: true })
+    expect(textDeclaration(UTF16BE_BOM, true)).toEqual({ kind: 'text', encoding: 'utf-16be', bomBytes: 2, nulInText: true })
+    // A non-final prefix that may still grow into a mark waits; a first byte no
+    // mark starts decides UTF-8 at once, as does an empty final file.
+    expect(textDeclaration(Buffer.from([0xef]), false)).toEqual({ kind: 'undecided' })
+    expect(textDeclaration(Buffer.from([0xff]), false)).toEqual({ kind: 'undecided' })
+    expect(textDeclaration(Buffer.from([0x41]), false)).toEqual({ kind: 'text', encoding: 'utf-8', bomBytes: 0, nulInText: false })
+    expect(textDeclaration(new Uint8Array(0), true)).toEqual({ kind: 'text', encoding: 'utf-8', bomBytes: 0, nulInText: false })
+    expect(textDeclaration(Buffer.from([0xff, 0xfe, 0x00, 0x00]), true)).toEqual({ kind: 'utf32le' })
+  })
+
+  it('streams a UTF-8 mark and drops it; whole reads drop it too', async () => {
+    const file = join(dir, 'bom8.txt')
+    await writeFile(file, Buffer.concat([UTF8_BOM, Buffer.from('one\ntwo\n', 'utf8')]))
+    expect(await collect(streamWholeText(localTarget(file)))).toBe('one\ntwo\n')
+    // Whole reads stay strict UTF-8, whose decoder also drops a leading mark.
+    expect(await readWholeText(localTarget(file))).toBe('one\ntwo\n')
+  })
+
+  it('streams UTF-16 LE and BE, including text beyond the BMP; whole reads refuse them', async () => {
+    const body = '设置=中文\nemoji=🚀\n'
+    const le = join(dir, 'le.txt')
+    await writeFile(le, Buffer.concat([UTF16LE_BOM, Buffer.from(body, 'utf16le')]))
+    const beBuffer = Buffer.from(body, 'utf16le')
+    beBuffer.swap16()
+    const be = join(dir, 'be.txt')
+    await writeFile(be, Buffer.concat([UTF16BE_BOM, beBuffer]))
+    for (const file of [le, be]) {
+      expect(await collect(streamWholeText(localTarget(file)))).toBe(body)
+      await expect(readWholeText(localTarget(file))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
+    }
+  })
+
+  it('streams a mark-only file as empty and refuses truncated and UTF-32 bodies', async () => {
+    const mark = join(dir, 'mark.txt')
+    await writeFile(mark, UTF8_BOM)
+    expect(await collect(streamWholeText(localTarget(mark)))).toBe('')
+    const odd = join(dir, 'odd.txt')
+    await writeFile(odd, Buffer.concat([UTF16LE_BOM, Buffer.from([0x41])]))
+    await expect(collect(streamWholeText(localTarget(odd)))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
+    const utf32 = join(dir, 'u32.txt')
+    await writeFile(utf32, Buffer.concat([Buffer.from([0xff, 0xfe, 0x00, 0x00]), Buffer.from('hi\u0000\u0000', 'utf16le')]))
+    await expect(collect(streamWholeText(localTarget(utf32)))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
+  })
+
+  it('still refuses NUL bytes behind a UTF-8 mark, and unmarked bytes read as before', async () => {
+    const nul = join(dir, 'nul.txt')
+    await writeFile(nul, Buffer.concat([UTF8_BOM, Buffer.from([0x41, 0x00])]))
+    await expect(readWholeText(localTarget(nul))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
+    await expect(collect(streamWholeText(localTarget(nul)))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
+    const plain = join(dir, 'plain.txt')
+    await writeFile(plain, 'unchanged')
+    expect(await readWholeText(localTarget(plain))).toBe('unchanged')
+    expect(await collect(streamWholeText(localTarget(plain)))).toBe('unchanged')
   })
 })
 

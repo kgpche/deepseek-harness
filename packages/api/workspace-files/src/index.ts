@@ -10,9 +10,10 @@
  * remain workspace-scoped. File-kind checks and configured read caps apply to
  * every preview; this service exposes no mutations.
  *
- * A page is cut from `streamText`, which decodes and rejects non-UTF-8 as it
- * goes, so the file is read only up to the first character past the page and
- * never held whole in memory; the NUL scan runs on the page itself.
+ * A page is cut from `streamText`, which decodes UTF-8 and byte-order-marked
+ * UTF-16 and rejects anything else as it goes, so the file is read only up to
+ * the first character past the page and never held whole in memory; the NUL
+ * scan runs on the page itself.
  *
  * This is NOT modelled on `session.openWorkspacePath`. That endpoint hands a
  * path to the local opener and leaves the effect on the machine; this one sends
@@ -223,7 +224,7 @@ export class WorkspaceFiles extends TypertRemoteService {
   }
 
   /**
-   * Read one page of lines from a UTF-8 file readable by the filesystem backend.
+   * Read one page of lines from a UTF-8 or byte-order-marked UTF-16 file readable by the filesystem backend.
    * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
    * @param path - absolute path or path relative to the workspace root; files outside it are allowed.
    * @param range - the line window; omitted fields take the page defaults.
@@ -447,7 +448,7 @@ export class WorkspaceFiles extends TypertRemoteService {
       return await cutPage(await this.ctx.fs.streamText(target, signal), offset, limit, this.config.maxBytes, path)
     } catch (error: unknown) {
       if (isNotTextRefusal(error)) {
-        throw new RemoteError('workspace-file/not-text', `"${path}" is not UTF-8 text`, { path }, { cause: error })
+        throw new RemoteError('workspace-file/not-text', `"${path}" is not decodable text`, { path }, { cause: error })
       }
       throw error
     }
