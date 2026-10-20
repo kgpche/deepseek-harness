@@ -59,3 +59,14 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Find marks name whole lines in the code renderer (shiki owns the tokens
+   inside them); the current match draws strongest, matching the plain body. */
+[data-code-find-hit] {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.18));
+}
+
+[data-code-find-current] {
+  background: var(--dsw-alias-interactive-bg-active, rgba(128, 128, 128, 0.32));
+  outline: 1px solid var(--dsw-alias-focus-border, rgba(128, 160, 255, 0.6));
+}

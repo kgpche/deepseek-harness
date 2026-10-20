@@ -8,7 +8,9 @@
  */
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { WorkspaceFileBytes, WorkspaceFileRange, WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
+import type {
+  WorkspaceFileBytes, WorkspaceFileFind, WorkspaceFileFindRequest, WorkspaceFileRange, WorkspaceFileText,
+} from '@deepseek-ai/dsh-api-workspace-files/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 
 /** The slice of the Client Remote this package calls. */
@@ -28,6 +30,20 @@ export interface WorkspaceFilesReadRemote {
       range: WorkspaceFileRange,
       signal?: AbortSignal,
     ): Promise<RemoteResult<WorkspaceFileText>>
+    /**
+     * Find query matches across the whole file.
+     * @param sessionId - the session whose workspace resolves `path`.
+     * @param path - workspace path, absolute or relative to the workspace root.
+     * @param request - the query and its matching options.
+     * @param signal - cancels the call.
+     * @returns the matches, or the failure the Host declares.
+     */
+    find(
+      sessionId: SessionId,
+      path: string,
+      request: WorkspaceFileFindRequest,
+      signal?: AbortSignal,
+    ): Promise<RemoteResult<WorkspaceFileFind>>
   }
 }
 
@@ -79,6 +95,30 @@ export function hostFileOf(address: string): SessionFile {
  */
 export function createReadPage(remote: WorkspaceFilesReadRemote): ReadWorkspaceFilePage {
   return (sessionId, path, offset, signal) => remote.workspaceFiles.read(sessionId, path, { offset }, signal)
+}
+
+/**
+ * The whole-file find one run performs, injected so the face stays host-free.
+ * @param sessionId - the session whose workspace resolves `path`.
+ * @param path - workspace path, absolute or relative to the workspace root.
+ * @param request - the query and its matching options.
+ * @param signal - cancels the call.
+ * @returns the matches, or the failure the Host declares.
+ */
+export type FindWorkspaceFile = (
+  sessionId: SessionId,
+  path: string,
+  request: WorkspaceFileFindRequest,
+  signal?: AbortSignal,
+) => Promise<RemoteResult<WorkspaceFileFind>>
+
+/**
+ * Bind the whole-file find to one Remote face.
+ * @param remote - the Client Remote carrying the `workspaceFiles` namespace.
+ * @returns the find the face performs.
+ */
+export function createFind(remote: WorkspaceFilesReadRemote): FindWorkspaceFile {
+  return (sessionId, path, request, signal) => remote.workspaceFiles.find(sessionId, path, request, signal)
 }
 
 /** Document bytes borrowed read-only by renderers; copy before transferring to a Worker. */

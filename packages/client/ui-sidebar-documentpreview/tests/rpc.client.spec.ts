@@ -6,9 +6,10 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
-import { createReadPage, hostFileOf } from '../src/client/rpc.ts'
-import type { ReadWorkspaceFilePage, WorkspaceFilesReadRemote } from '../src/client/index.ts'
+import { createFind, createReadPage, hostFileOf } from '../src/client/rpc.ts'
+import type { FindWorkspaceFile, ReadWorkspaceFilePage, WorkspaceFilesReadRemote } from '../src/client/index.ts'
 import { ADDRESS, FILE, PATH, SESSION, page } from './fixtures.client.ts'
+import type { WorkspaceFileFind } from '@deepseek-ai/dsh-api-workspace-files/types'
 
 describe('hostFileOf', () => {
   it('reads the session and the decoded relative path out of a session file address', () => {
@@ -34,8 +35,21 @@ describe('createReadPage', () => {
   it('binds the paged read to the Remote with the offset as the only range', async () => {
     const read = vi.fn<WorkspaceFilesReadRemote['workspaceFiles']['read']>(() => Promise.resolve(page(4, ['d'], true)))
     const signal = new AbortController().signal
-    const readPage: ReadWorkspaceFilePage = createReadPage({ workspaceFiles: { read } })
+    const readPage: ReadWorkspaceFilePage = createReadPage({ workspaceFiles: { read, find: vi.fn() } })
     await expect(readPage(SESSION, PATH, 4, signal)).resolves.toEqual(page(4, ['d'], true))
     expect(read).toHaveBeenCalledWith(SESSION, PATH, { offset: 4 }, signal)
+  })
+})
+
+describe('createFind', () => {
+  it('binds the whole-file find to the Remote untouched', async () => {
+    const found: WorkspaceFileFind = {
+      absolutePath: PATH, version: 'v1', matches: [{ lineNumber: 2, start: 0, end: 2, line: 'hi there' }], truncated: false,
+    }
+    const find = vi.fn<WorkspaceFilesReadRemote['workspaceFiles']['find']>(() => Promise.resolve({ ok: true, value: found }))
+    const signal = new AbortController().signal
+    const run: FindWorkspaceFile = createFind({ workspaceFiles: { read: vi.fn(), find } })
+    await expect(run(SESSION, PATH, { query: 'hi' }, signal)).resolves.toEqual({ ok: true, value: found })
+    expect(find).toHaveBeenCalledWith(SESSION, PATH, { query: 'hi' }, signal)
   })
 })

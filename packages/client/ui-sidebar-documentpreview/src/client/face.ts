@@ -19,7 +19,8 @@
 import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ReadDocumentBytes, ReadWorkspaceFilePage, SessionFile } from './rpc.ts'
+import type { WorkspaceFileFindRequest } from '@deepseek-ai/dsh-api-workspace-files/types'
+import type { FindWorkspaceFile, ReadDocumentBytes, ReadWorkspaceFilePage, SessionFile } from './rpc.ts'
 import type { TextStore } from './store.ts'
 import type { DocumentLoadMode } from './document/registry.ts'
 import type { Resources } from '@deepseek-ai/dsh-client-resources/client'
@@ -82,6 +83,15 @@ export interface TextInjected {
    * @param reload - discard the previous content revision.
    */
   readonly prepareRenderer: (tabId: TabId, signal: AbortSignal, rendererId: string, observedVersion?: string, reload?: boolean) => void
+  /**
+   * Run one whole-file find into the store. The run in flight for the tab is
+   * aborted; a settlement for a request the bar has left behind writes nothing.
+   * @param tabId - the tab being drawn.
+   * @param file - the session and workspace path the tab's address names.
+   * @param request - the query and its matching options.
+   * @param signal - the tab record's lifetime.
+   */
+  readonly runFind: (tabId: TabId, file: SessionFile, request: WorkspaceFileFindRequest, signal: AbortSignal) => void
 }
 
 /**
@@ -96,6 +106,7 @@ interface TabReads {
   mode: DocumentLoadMode
   rendererId?: string
   controller?: AbortController
+  findController?: AbortController
 }
 
 /**
@@ -108,6 +119,7 @@ interface TabReads {
 export function textFace(
   read: ReadWorkspaceFilePage,
   readAll: ReadDocumentBytes,
+  find: FindWorkspaceFile,
   resources: Resources,
 ): (sessionId: SessionId, actions: BoundActions<TextStore>) => TextInjected {
   return (_sessionId: SessionId, actions: BoundActions<TextStore>): TextInjected => {
@@ -124,6 +136,7 @@ export function textFace(
       tabs.set(tabId, created)
       signal.addEventListener('abort', () => {
         created.controller?.abort()
+        created.findController?.abort()
         created.group.close()
         tabs.delete(tabId)
         actions.forget(tabId)
@@ -218,6 +231,30 @@ export function textFace(
         actions.loading(tabId, 'renderer', observedVersion, rendererId)
       },
       reloadAll: (tabId, file, signal, observedVersion) => { restart(tabId, file, signal, observedVersion, 'bytes-complete') },
+      runFind: (tabId, file, request, signal) => {
+        if (signal.aborted) return
+        const reads = readsOf(tabId, signal)
+        if (reads.mode !== 'text-pages') return
+        reads.findController?.abort()
+        const controller = new AbortController()
+        reads.findController = controller
+        const lifetime = AbortSignal.any([signal, controller.signal])
+        actions.findLoading(tabId)
+        void find(file.sessionId, file.path, request, lifetime).then((result) => {
+          if (lifetime.aborted) return
+          if (!result.ok) {
+            actions.findFailed(tabId, request, result.error)
+            return
+          }
+          actions.findSettled(tabId, request, result.value)
+        }, (error: unknown) => {
+          if (lifetime.aborted) return
+          actions.findFailed(tabId, request, Object.assign(
+            new Error(error instanceof Error ? error.message : String(error), { cause: error }),
+            { name: 'RemoteError', isDSHRemoteError: true as const, code: 'gateway/internal' as const, details: {} },
+          ))
+        })
+      },
     }
   }
 }

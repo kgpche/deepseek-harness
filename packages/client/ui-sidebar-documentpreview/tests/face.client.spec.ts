@@ -11,7 +11,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
 import { textFace } from '../src/client/face.ts'
-import type { DocumentFileBytes, ReadDocumentBytes, ReadWorkspaceFilePage } from '../src/client/rpc.ts'
+import type { DocumentFileBytes, FindWorkspaceFile, ReadDocumentBytes, ReadWorkspaceFilePage } from '../src/client/rpc.ts'
 import { hostFileOf } from '../src/client/rpc.ts'
 import { createTextStore } from '../src/client/store.ts'
 import { ABSOLUTE_PATH, FILE, PATH, SESSION, createResources, failure, page } from './fixtures.client.ts'
@@ -95,7 +95,7 @@ function bench(sessionId = 'other-session' as SessionId) {
   const forget = vi.fn(instance.actions.forget)
   // Injected for another session on purpose: the address's session must win.
   const resources = createResources()
-  const face = textFace(read, bytes, resources)(sessionId, { ...instance.actions, forget })
+  const face = textFace(read, bytes, vi.fn<FindWorkspaceFile>(), resources)(sessionId, { ...instance.actions, forget })
   /** Settle the oldest outstanding read, or the oldest one for `offset`. */
   const settle = async (result: RemoteResult<WorkspaceFileText>, offset?: number): Promise<void> => {
     const at = offset === undefined ? 0 : pending.findIndex(call => call.offset === offset)
@@ -418,7 +418,8 @@ it.each([new Error('invalid bytes'), 'invalid bytes'])('reports an active comple
   const controller = new AbortController()
   const read = vi.fn<ReadDocumentBytes>().mockRejectedValue(failure)
   try {
-    textFace(vi.fn(), read, createResources())(SESSION, instance.actions).loadAll(TAB_1, FILE, controller.signal)
+    const face = textFace(vi.fn(), read, vi.fn<FindWorkspaceFile>(), createResources())(SESSION, instance.actions)
+    face.loadAll(TAB_1, FILE, controller.signal)
     await Promise.resolve()
     expect(instance.getSnapshot().byTab[TAB_1]?.failure).toMatchObject({ code: 'gateway/internal', message: 'invalid bytes' })
   } finally { controller.abort() }
@@ -428,7 +429,7 @@ it('ignores a complete-read rejection after renderer-owned loading takes over', 
   const instance = createTextStore().create()
   const controller = new AbortController()
   const pending = Promise.withResolvers<Awaited<ReturnType<ReadDocumentBytes>>>()
-  const face = textFace(vi.fn(), () => pending.promise, createResources())(SESSION, instance.actions)
+  const face = textFace(vi.fn(), () => pending.promise, vi.fn<FindWorkspaceFile>(), createResources())(SESSION, instance.actions)
   try {
     face.loadAll(TAB_1, FILE, controller.signal)
     face.prepareRenderer(TAB_1, controller.signal, 'office')

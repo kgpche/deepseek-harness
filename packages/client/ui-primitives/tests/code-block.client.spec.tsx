@@ -93,6 +93,34 @@ describe('highlightToHtml', () => {
 })
 
 describe('CodeBlock', () => {
+  it('applies per-line data attributes after commit and removes retired keys', async () => {
+    const view = render(<CodeBlock
+      code={`one
+two
+three`}
+      lang="ts"
+      lineNumbers
+      lineData={line => line === 2 ? { 'find-hit': '' } : undefined}
+    />)
+    await act(async () => {})
+    const lines = [...view.container.querySelectorAll('span.line')]
+    expect(lines).toHaveLength(3)
+    expect(lines[0]?.getAttribute('data-find-hit')).toBeNull()
+    expect(lines[1]?.getAttribute('data-find-hit')).toBe('')
+    // The callback's answer changing unmarks the line it dropped.
+    view.rerender(<CodeBlock
+      code={`one
+two
+three`}
+      lang="ts"
+      lineNumbers
+      lineData={line => line === 1 ? { 'find-hit': '' } : undefined}
+    />)
+    await act(async () => {})
+    expect(lines[0]?.getAttribute('data-find-hit')).toBe('')
+    expect(lines[1]?.getAttribute('data-find-hit')).toBeNull()
+  })
+
   it('reports the stable source-content wrapper to its owner', () => {
     const contentRef = vi.fn<(node: HTMLDivElement | null) => void>()
     const view = render(<CodeBlock code="plain text" contentRef={contentRef} />)

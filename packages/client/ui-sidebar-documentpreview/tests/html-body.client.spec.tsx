@@ -12,6 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TextPreview } from '../src/client/TextPreview.tsx'
 import type { DocumentBodyOwner } from '../src/client/document/contract.ts'
 import { textFace } from '../src/client/face.ts'
+import type { FindWorkspaceFile } from '../src/client/rpc.ts'
 import { HtmlBody } from '../src/client/html/HtmlBody.tsx'
 import type { HtmlBodyProps } from '../src/client/html/HtmlBody.tsx'
 import { htmlBodyDefinition } from '../src/client/html/index.ts'
@@ -83,7 +84,7 @@ describe('HtmlBody', () => {
       source: address => address === ADDRESS ? root : dependencySource,
       register: () => () => {}, pin: () => {},
     }
-    const face = textFace(h.read, h.bytes, resources)(SESSION, h.instance.actions)
+    const face = textFace(h.read, h.bytes, vi.fn<FindWorkspaceFile>(), resources)(SESSION, h.instance.actions)
     const data = utf8(extension === 'css'
       ? '<link rel="stylesheet" href="./asset.css"><p>HTML content</p>'
       : '<p>HTML content</p><script src="./asset.js"></script>')

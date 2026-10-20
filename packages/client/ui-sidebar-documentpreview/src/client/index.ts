@@ -12,6 +12,7 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -25,8 +26,9 @@ import type { TextPreviewInjected } from './TextPreview.tsx'
 import { TextTitle } from './TextTitle.tsx'
 import { TEXTPREVIEW_ID, textDefinition } from './definition.ts'
 import { textFace } from './face.ts'
-import { createReadPage } from './rpc.ts'
+import { createFind, createReadPage } from './rpc.ts'
 import { createTextStore } from './store.ts'
+import { createFindRequest, requestFind } from './shortcuts.ts'
 import { en, zh } from './locales.ts'
 import { DocumentPreviewRegistry } from './document/registry.ts'
 import { documentTabInfoFactory } from './document/contract.ts'
@@ -46,9 +48,10 @@ import { Config } from '../config.ts'
 export type { SidebarDocumentPreviewKey } from './locales.ts'
 export type { TextPreviewProps } from './TextPreview.tsx'
 export type { TextInjected } from './face.ts'
-export type { ReadDocumentBytes, DocumentFileBytes, ReadWorkspaceFilePage, SessionFile, WorkspaceFilesReadRemote } from './rpc.ts'
-export type { TextPage, TextState, TextStore, TextTabState } from './store.ts'
-export type { DocumentContent, DocumentPreviewProps, DocumentTextPage } from './document/contract.ts'
+export type { ReadDocumentBytes, DocumentFileBytes, FindWorkspaceFile, ReadWorkspaceFilePage, SessionFile, WorkspaceFilesReadRemote } from './rpc.ts'
+export type { FindRequest } from './shortcuts.ts'
+export type { FindState, TextPage, TextState, TextStore, TextTabState } from './store.ts'
+export type { DocumentContent, DocumentFindMarks, DocumentPreviewProps, DocumentTextPage } from './document/contract.ts'
 export type { DocumentLoadMode, DocumentPreviewDefinition } from './document/registry.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -79,7 +82,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
  * Required browser services: the tab registry, the slot registry, copy, and the
  * workspace Remote for bytes and paged text reads.
  */
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'configForms', 'resources']
+export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.workspaceFiles', 'configForms', 'resources', 'shortcuts']
 
 /**
  * Client plugin body: register the type, its dictionaries, its body, and its chip title.
@@ -94,9 +97,11 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar-documentpreview: dictionaries')
 
   const store = createTextStore()
+  const findRequest = createFindRequest()
   const face = textFace(
     createReadPage(ctx.remote),
     (file, signal) => ctx.remote.workspaceFiles.readBytes(file.sessionId, file.path, {}, signal),
+    createFind(ctx.remote),
     ctx.resources,
   )
   const source = { getSnapshot: previews.getSnapshot, subscribe: previews.subscribe }
@@ -110,11 +115,32 @@ export function apply(ctx: ClientContext): void {
         'sidebar.right.tab.document.action': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } },
       },
       inject: (sessionId, actions): TextPreviewInjected => ({
-        ...face(sessionId, actions), hooks: { documentPreviews: source },
+        ...face(sessionId, actions), hooks: { documentPreviews: source }, findRequest,
       }),
     },
     TextPreview,
   )), 'ui-sidebar-documentpreview: text body')
+  // Desktop owns primary+KeyF outright; web forbids a bare Ctrl/Cmd+F default
+  // (the browser's find bar), so web:macos and web:windows take primary+alt,
+  // the admissible pair session.fork's web default leaves free. web:linux
+  // admits none of those, so it takes the admissible primary+shift+Period.
+  const t = ctx.locale.bind(NS)
+  ctx.effect(() => ctx.shortcuts.register({
+    id: 'document.find' as ShortcutCommandId,
+    label: () => t('find.command'),
+    aliases: ['find in file'],
+    defaults: {
+      'desktop:macos': { code: 'KeyF', modifiers: ['primary'] },
+      'desktop:windows': { code: 'KeyF', modifiers: ['primary'] },
+      'desktop:linux': { code: 'KeyF', modifiers: ['primary'] },
+      'web:macos': { code: 'KeyF', modifiers: ['primary', 'alt'] },
+      'web:windows': { code: 'KeyF', modifiers: ['primary', 'alt'] },
+      'web:linux': { code: 'Period', modifiers: ['primary', 'shift'] },
+    },
+    regions: ['page', 'editable'],
+    modals: [],
+    resolve: () => ({ status: 'handled', run: () => { requestFind(findRequest) } }),
+  }), 'ui-sidebar-documentpreview: document.find')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab.title', key: TEXTPREVIEW_ID },
     TextTitle,

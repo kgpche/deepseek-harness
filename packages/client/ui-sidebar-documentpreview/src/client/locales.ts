@@ -30,6 +30,16 @@ export const zh = {
   'error.notRegularFile': '该路径不是普通文件，没有可显示的内容',
   'error.unavailable': '读取失败：{message}',
   retry: '重试',
+  'find.command': '在文件中查找',
+  'find.placeholder': '查找',
+  'find.aria': '在文件中查找',
+  'find.none': '无结果',
+  'find.failed': '查找失败',
+  'find.caseSensitive': '区分大小写 (Alt+C)',
+  'find.regex': '使用正则表达式 (Alt+R)',
+  'find.next': '下一个匹配',
+  'find.previous': '上一个匹配',
+  'find.close': '关闭查找',
 } satisfies Record<string, string>
 
 /** Text-preview dictionary key union. */
@@ -59,4 +69,14 @@ export const en = {
   'error.notRegularFile': 'Not a regular file, nothing to display.',
   'error.unavailable': 'Read failed: {message}',
   retry: 'Retry',
+  'find.command': 'Find in file',
+  'find.placeholder': 'Find',
+  'find.aria': 'Find in file',
+  'find.none': 'No results',
+  'find.failed': 'Find failed',
+  'find.caseSensitive': 'Match case (Alt+C)',
+  'find.regex': 'Use regular expression (Alt+R)',
+  'find.next': 'Next match',
+  'find.previous': 'Previous match',
+  'find.close': 'Close find',
 } satisfies Record<SidebarDocumentPreviewKey, string>

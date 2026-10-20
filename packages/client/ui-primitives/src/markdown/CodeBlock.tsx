@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, ReactNode, Ref } from 'react'
 import clsx from 'clsx'
 import { writeClipboard } from '../clipboard.ts'
@@ -40,6 +40,13 @@ export interface CodeBlockProps {
   toolbarLabels?: CodeToolbarLabels | undefined
   /** With toolbarLabels, use the owner's wrapping preference and omit the toolbar's local wrap action. */
   wrap?: boolean | undefined
+  /**
+   * Data attributes for specific lines (find marks and the like), keyed without
+   * the `data-` prefix and applied to every arm's `span.line`. Applied after
+   * commit over the rendered tree, so shiki's injected HTML carries them too;
+   * a line the callback omits keeps whatever the caller last set for others.
+   */
+  lineData?: ((line: number) => Record<string, string> | undefined) | undefined
 }
 
 /**
@@ -69,7 +76,8 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
 }
 
 export function CodeBlock({
-  code, lang, streaming, className, contentRef, lineNumbers = false, showHeader = true, copyLabel, copiedLabel, toolbarLabels, wrap,
+  code, lang, streaming, className, contentRef, lineNumbers = false, showHeader = true,
+  copyLabel, copiedLabel, toolbarLabels, wrap, lineData,
 }: CodeBlockProps) {
   const trimmed = code.endsWith('\n') ? code.slice(0, -1) : code
   const sourceLines = lineNumbers ? trimmed.split('\n') : undefined
@@ -183,6 +191,31 @@ export function CodeBlock({
       : (
         <div dangerouslySetInnerHTML={{ __html: html }} />
       )
+
+  // Per-line data attributes, applied after commit over whatever arm rendered:
+  // only this component knows that all three arms keep one `span.line` per
+  // source line. Idempotent; a key a line no longer receives is removed from
+  // that line even while other lines keep it.
+  const appliedLineDataRef = useRef<ReadonlySet<string>>(new Set())
+  useEffect(() => {
+    const root = rootRef.current
+    if (root === null) return
+    const lines = root.querySelectorAll<HTMLElement>('span.line')
+    if (lines.length === 0) return
+    const applied = new Set<string>()
+    lines.forEach((line, index) => {
+      const data = lineData?.(index + 1) ?? {}
+      const keys = new Set(Object.keys(data))
+      for (const key of appliedLineDataRef.current) {
+        if (!keys.has(key)) line.removeAttribute(`data-${key}`)
+      }
+      for (const [key, value] of Object.entries(data)) {
+        line.setAttribute(`data-${key}`, value)
+        applied.add(key)
+      }
+    })
+    appliedLineDataRef.current = applied
+  }, [body, html, lineData])
 
   return (
     <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, toolbarLabels !== undefined && css.card, className)}

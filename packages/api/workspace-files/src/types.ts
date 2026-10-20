@@ -150,6 +150,40 @@ export type WorkspaceFileWatchFrame =
   | { readonly kind: 'ready' }
   | { readonly kind: 'change'; readonly change: WorkspaceFileChange }
 
+/** How one `find` matches lines against its query. */
+export interface WorkspaceFileFindOptions {
+  /** Match the query's characters exactly. Defaults to case-insensitive. */
+  readonly caseSensitive?: boolean
+  /** Treat the query as a regular expression. Defaults to a literal substring. */
+  readonly regex?: boolean
+}
+
+/** What one `find` searches for. */
+export interface WorkspaceFileFindRequest extends WorkspaceFileFindOptions {
+  /** The literal substring or regular expression to search for. */
+  readonly query: string
+}
+
+/** One query occurrence on one line of the searched file. */
+export interface WorkspaceFileMatch {
+  /** 1-based line the match lies on. */
+  readonly lineNumber: number
+  /** Inclusive start of the match, in code-unit offsets within {@link line}. */
+  readonly start: number
+  /** Exclusive end of the match, in code-unit offsets within {@link line}. */
+  readonly end: number
+  /** The whole matched line, previewed to the configured per-line cap. */
+  readonly line: string
+}
+
+/** The matches one `find` returns for a file. */
+export interface WorkspaceFileFind extends WorkspaceFileStat {
+  /** Matches in file order, cut to the configured result cap. */
+  readonly matches: readonly WorkspaceFileMatch[]
+  /** Whether the result cap stopped the scan before the file's end. */
+  readonly truncated: boolean
+}
+
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /** The filesystem provider cannot initialize a watch for this target. */

@@ -21,7 +21,9 @@ import type { WorkspaceFileStat, WorkspaceFileText } from '@deepseek-ai/dsh-api-
 import type { TextPreviewProps } from '../src/client/TextPreview.tsx'
 import { textFace } from '../src/client/face.ts'
 import type { TextInjected } from '../src/client/face.ts'
-import type { DocumentFileBytes, ReadDocumentBytes, ReadWorkspaceFilePage, SessionFile } from '../src/client/rpc.ts'
+import type { DocumentFileBytes, FindWorkspaceFile, ReadDocumentBytes, ReadWorkspaceFilePage, SessionFile } from '../src/client/rpc.ts'
+import { createFindRequest } from '../src/client/shortcuts.ts'
+import type { FindRequest } from '../src/client/shortcuts.ts'
 import { createTextStore } from '../src/client/store.ts'
 import type { TextStore } from '../src/client/store.ts'
 import type { DocumentPreviewProps } from '../src/client/document/contract.ts'
@@ -104,6 +106,10 @@ export interface Harness {
   read: Mock<ReadWorkspaceFilePage>
   /** The complete byte reader. */
   bytes: Mock<ReadDocumentBytes>
+  /** The scripted whole-file find. */
+  find: Mock<FindWorkspaceFile>
+  /** The find command's open request source. */
+  findRequest: FindRequest
   /** The tab record's lifetime. */
   controller: AbortController
   /** Current file metadata. */
@@ -132,7 +138,9 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
   const read = vi.fn<ReadWorkspaceFilePage>((_session, _path, offset) =>
     Promise.resolve(pages[offset] ?? failure('workspace-file/not-found', { path: PATH })))
   const bytes = vi.fn<ReadDocumentBytes>()
-  const face = textFace(read, bytes, createResources())(SESSION, instance.actions)
+  const find = vi.fn<FindWorkspaceFile>(() => Promise.resolve({ ok: false, error: { code: 'workspace-file/not-found', message: 'boom', details: { path: PATH } } as unknown as RemoteFailure }))
+  const face = textFace(read, bytes, find, createResources())(SESSION, instance.actions)
+  const findRequest = createFindRequest()
   const current = { version: 'v1' as string | undefined, failure: undefined as RemoteFailure | undefined, snapshot: meta('v1', undefined) }
   const refresh = (): void => { current.snapshot = meta(current.version, current.failure) }
   const useResource = vi.fn<() => ResourceSnapshot<WorkspaceFileStat>>(() => current.snapshot)
@@ -169,7 +177,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     loadPage: face.loadPage,
     reloadPages: face.reloadPages,
     prepareRenderer: face.prepareRenderer, loadAll: face.loadAll,
-    reloadAll: face.reloadAll,
+    reloadAll: face.reloadAll, runFind: face.runFind, findRequest,
     addResource: face.addResource, setResources: face.setResources,
     useDocumentPreviews: () => definitions,
     renderSlot,
@@ -179,6 +187,8 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     instance,
     face,
     read,
+    find,
+    findRequest,
     bytes,
     controller,
     get file() { return current.snapshot.value },

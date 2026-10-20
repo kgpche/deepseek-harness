@@ -15,7 +15,7 @@
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import type { WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
+import type { WorkspaceFileFindRequest, WorkspaceFileMatch, WorkspaceFileText } from '@deepseek-ai/dsh-api-workspace-files/types'
 import type { DocumentFileBytes } from './rpc.ts'
 import type { DocumentLoadMode } from './document/registry.ts'
 
@@ -27,6 +27,36 @@ import type { DocumentLoadMode } from './document/registry.ts'
 export interface TextPage {
   readonly text: string
   readonly lines: number
+}
+
+/** One find query's live state: the query, its settled outcome, and the current match. */
+export interface FindState {
+  /** The query the bar holds; results answer it with the flags below. */
+  query: string
+  /** Whether the query matches case-sensitively. */
+  caseSensitive: boolean
+  /** Whether the query is a regular expression. */
+  regex: boolean
+  /** Matches in file order; empty before the first run and after an edit. */
+  matches: readonly WorkspaceFileMatch[]
+  /** Whether the Host's result cap cut the scan. */
+  truncated: boolean
+  /** Index into `matches` of the current match; −1 with none. */
+  index: number
+  /** Index the body already scrolled to, so unrelated writes do not re-land it. */
+  landed: number
+  /** A find is in flight. */
+  loading: boolean
+  /** Why the last find failed; cleared by the next edit or run. */
+  failure: RemoteFailure | undefined
+}
+
+/** A find state before anything was asked. */
+function freshFind(): FindState {
+  return {
+    query: '', caseSensitive: false, regex: false, matches: [], truncated: false,
+    index: -1, landed: -1, loading: false, failure: undefined,
+  }
 }
 
 /** One tab's pages and view. */
@@ -61,6 +91,10 @@ export interface TextTabState {
   wrap: boolean
   /** The `navigation.revision` the body already answered; absent before the first. */
   revision: number | undefined
+  /** Whether the find bar is open over the body. */
+  findOpen: boolean
+  /** The find bar's live query state; absent until the bar first opens. */
+  find: FindState | undefined
 }
 
 /** Every tab's state, keyed by tab id. */
@@ -86,6 +120,8 @@ export function fresh(): TextTabState {
     scrollTop: 0,
     wrap: true,
     revision: undefined,
+    findOpen: false,
+    find: undefined,
   }
 }
 
@@ -109,8 +145,23 @@ type TextActions = {
   scrolled: (draft: TextState, tabId: TabId, scrollTop: number) => void
   toggledWrap: (draft: TextState, tabId: TabId) => void
   navigated: (draft: TextState, tabId: TabId, revision: number) => void
+  findOpened: (draft: TextState, tabId: TabId) => void
+  findClosed: (draft: TextState, tabId: TabId) => void
+  findEdited: (draft: TextState, tabId: TabId, query: string) => void
+  findToggled: (draft: TextState, tabId: TabId, flag: 'caseSensitive' | 'regex') => void
+  findLoading: (draft: TextState, tabId: TabId) => void
+  findSettled: (
+    draft: TextState, tabId: TabId, request: FindRequestKey,
+    result: { readonly matches: readonly WorkspaceFileMatch[]; readonly truncated: boolean },
+  ) => void
+  findFailed: (draft: TextState, tabId: TabId, request: FindRequestKey, failure: RemoteFailure) => void
+  findStepped: (draft: TextState, tabId: TabId, delta: 1 | -1) => void
+  findLanded: (draft: TextState, tabId: TabId) => void
   forget: (draft: TextState, tabId: TabId) => void
 }
+
+/** The request identity a settlement must still match to be kept. */
+export type FindRequestKey = Pick<WorkspaceFileFindRequest, 'query' | 'caseSensitive' | 'regex'>
 
 /**
  * Declare the preview's store.
@@ -184,7 +235,11 @@ export function createTextStore(): EngineStoreHandle<TextState, TextActions> {
        */
       page: (d, tabId: TabId, page: WorkspaceFileText) => {
         const state = bucket(d, tabId)
-        if (state.version !== undefined && state.version !== page.version) state.pages = {}
+        if (state.version !== undefined && state.version !== page.version) {
+          state.pages = {}
+          // The find results answered the retired version; the query stays for a re-run.
+          if (state.find !== undefined) state.find = { ...state.find, matches: [], truncated: false, index: -1, landed: -1, loading: false }
+        }
         state.version = page.version
         state.pages[page.offset] = { text: page.text, lines: page.lines }
         state.eof = page.eof
@@ -218,6 +273,7 @@ export function createTextStore(): EngineStoreHandle<TextState, TextActions> {
         state.observedVersion = undefined
         state.loading = false
         state.failure = undefined
+        if (state.find !== undefined) state.find = { ...state.find, matches: [], truncated: false, index: -1, landed: -1, loading: false }
       },
       /**
        * Record where one tab's body is scrolled to.
@@ -246,6 +302,109 @@ export function createTextStore(): EngineStoreHandle<TextState, TextActions> {
        */
       navigated: (d, tabId: TabId, revision: number) => {
         bucket(d, tabId).revision = revision
+      },
+      /** @param d - draft. @param tabId - owning tab. */
+      findOpened: (d, tabId: TabId) => {
+        const state = bucket(d, tabId)
+        state.findOpen = true
+        state.find ??= freshFind()
+      },
+      /** @param d - draft. @param tabId - owning tab. */
+      findClosed: (d, tabId: TabId) => {
+        bucket(d, tabId).findOpen = false
+      },
+      /**
+       * Keep the query and retire the previous results: they answered something
+       * else and must not mark lines or drive the counter until the next run.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param query - the query text the bar now holds.
+       */
+      findEdited: (d, tabId: TabId, query: string) => {
+        const find = bucket(d, tabId).find ??= freshFind()
+        find.query = query
+        find.matches = []
+        find.truncated = false
+        find.index = -1
+        find.landed = -1
+        find.loading = false
+        find.failure = undefined
+      },
+      /**
+       * Flip one matching flag and retire the results with it.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param flag - the flag the bar toggled.
+       */
+      findToggled: (d, tabId: TabId, flag: 'caseSensitive' | 'regex') => {
+        const find = bucket(d, tabId).find ??= freshFind()
+        find[flag] = !find[flag]
+        find.matches = []
+        find.truncated = false
+        find.index = -1
+        find.landed = -1
+        find.loading = false
+        find.failure = undefined
+      },
+      /** @param d - draft. @param tabId - owning tab. */
+      findLoading: (d, tabId: TabId) => {
+        const find = bucket(d, tabId).find
+        if (find !== undefined) find.loading = true
+      },
+      /**
+       * Keep one settled find. A settlement for a request the bar has since
+       * left behind — more typing, a toggled flag — writes nothing.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param request - the request the result answers.
+       * @param result - the matches and cut marker the Host returned.
+       */
+      findSettled: (
+        d, tabId: TabId, request: FindRequestKey,
+        result: { readonly matches: readonly WorkspaceFileMatch[]; readonly truncated: boolean },
+      ) => {
+        const find = d.byTab[tabId]?.find
+        if (find === undefined || find.query !== request.query
+          || find.caseSensitive !== (request.caseSensitive ?? false) || find.regex !== (request.regex ?? false)) return
+        find.loading = false
+        find.matches = [...result.matches]
+        find.truncated = result.truncated
+        find.index = result.matches.length > 0 ? 0 : -1
+        find.landed = -1
+      },
+      /**
+       * Record why one find failed, under the same request identity guard.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param request - the request that failed.
+       * @param failure - the settled Remote failure.
+       */
+      findFailed: (d, tabId: TabId, request: FindRequestKey, failure: RemoteFailure) => {
+        const find = d.byTab[tabId]?.find
+        if (find === undefined || find.query !== request.query
+          || find.caseSensitive !== (request.caseSensitive ?? false) || find.regex !== (request.regex ?? false)) return
+        find.loading = false
+        find.failure = failure
+      },
+      /**
+       * Move the current match, wrapping around like VSCode's find.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       * @param delta - step direction: `1` forward, `-1` back.
+       */
+      findStepped: (d, tabId: TabId, delta: 1 | -1) => {
+        const find = d.byTab[tabId]?.find
+        if (find === undefined || find.matches.length === 0) return
+        find.index = (find.index + delta + find.matches.length) % find.matches.length
+      },
+      /**
+       * Record that the body scrolled to the current match.
+       * @param d - draft state.
+       * @param tabId - the tab being drawn.
+       */
+      findLanded: (d, tabId: TabId) => {
+        const find = d.byTab[tabId]?.find
+        if (find !== undefined && find.index !== find.landed) find.landed = find.index
       },
       /**
        * Drop one tab's state, for a tab record that is gone.

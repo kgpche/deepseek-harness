@@ -12,8 +12,8 @@
   en: a74c16667d0baada
   zh: 4fd709ff9f98b84f
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/table-of-contents:
-  en: 0dd8c3a22e28aacf
-  zh: c27c11bf4b5cceba
+  en: fef83dfc9c619b46
+  zh: d4a1664a9b1f8aa8
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/what-it-registers:
   en: 54a50f4a3a6e4d45
   zh: af905ed570812432
@@ -30,8 +30,11 @@
   en: 372d8ce6492e6896
   zh: 912f613bc9221aa3
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/navigation:
-  en: 5cd81a7b3cdc83bd
-  zh: 4cdd1b7ede497925
+  en: fb4f274587d9723a
+  zh: 3d9b47d903e12598
+/deepseek-ai-dsh-client-ui-sidebar-documentpreview/find:
+  en: 46c07005e3b77127
+  zh: f8db680da912b132
 /deepseek-ai-dsh-client-ui-sidebar-documentpreview/model-experience:
   en: ca1deb99d0e44755
   zh: f285fc56cee669ec

@@ -33,6 +33,7 @@ kind: "package-reference"
 | `read(path, { offset?, limit? })` | `WorkspaceFileText` = stat + `{ offset, text, lines, eof }` | 文本文件（UTF-8，或由字节序标记指明的 UTF-16 LE/BE）的一个行窗口；`lines` 计行数，使单个空行与越过文件末尾的页可区分 |
 | `readBytes(path, { range?, baseFile? })` | `WorkspaceFileBytes` = stat + `{ offset, data, eof }` | 以 `Uint8Array` 返回完整文件或有界字节范围；可从另一个文件所在目录解析目标 |
 | `list(path)` | `WorkspaceDirectoryListing { path, entries, truncated }` | 一个目录的直接子项 |
+| `find(path, request)` | `WorkspaceFileFind` = stat + `{ matches, truncated }` | 跨整个文本文件（与 `read` 相同的编码集）查询匹配：默认字面量，可要求区分大小写或正则，截断到 `maxFindResults` |
 | `changes(path)` | `WorkspaceFileWatchFrame` 流 | 订阅就绪确认，随后为单个文件或目录直接子项的失效通知 |
 
 ### 寻址与路径
@@ -51,7 +52,7 @@ kind: "package-reference"
 
 ### 文件读取与目录检查
 
-每项操作都先通过 `lstat` 拒绝不存在的路径或错误的文件类型；读取文件的操作还拒绝末端符号链接，包括指回工作区内的链接。`list` 改为跟随末端链接——任何平台上的目录符号链接，包括 Windows 目录联接——要求它解析为工作区内的目录，因此被链接的目录与其目标一样可列举；`changes` 也以同样方式把被监听的目录限制在工作区内。文件操作随后通过组合文件系统解析和读取，不做额外的工作区包含检查。配置的分页、窗口、完整文件和目录列举上限仍然适用。文本页解码 UTF-8 与带字节序标记的 UTF-16 LE/BE，其余一律拒绝（包括页上的 NUL 字节）；字节读取不解码内容。读取或列举的空路径是 `gateway/bad-request`。
+每项操作都先通过 `lstat` 拒绝不存在的路径或错误的文件类型；读取文件的操作还拒绝末端符号链接，包括指回工作区内的链接。`list` 改为跟随末端链接——任何平台上的目录符号链接，包括 Windows 目录联接——要求它解析为工作区内的目录，因此被链接的目录与其目标一样可列举；`changes` 也以同样方式把被监听的目录限制在工作区内。文件操作随后通过组合文件系统解析和读取，不做额外的工作区包含检查。`find` 经由与 `read` 相同的文本解码单遍扫描整个文件，仅保留当前行在内存中，报告每个匹配的 1 基行号与行内跨度；空查询或非法正则在打开任何文件之前就是 `gateway/bad-request`，匹配行预览截断到 200 码元。配置的分页、窗口、完整文件、目录列举与查找结果上限仍然适用。文本页解码 UTF-8 与带字节序标记的 UTF-16 LE/BE，其余一律拒绝（包括页上的 NUL 字节）；字节读取不解码内容。读取或列举的空路径是 `gateway/bad-request`。
 
 ### 变更流
 

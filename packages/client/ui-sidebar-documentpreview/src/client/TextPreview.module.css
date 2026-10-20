@@ -289,3 +289,90 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* The find bar: one row floating over the body's top right, above content. */
+.findBar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  width: fit-content;
+  padding: 4px 6px;
+  border-radius: var(--dsw-radius-r20, 10px);
+  background: var(--dsw-alias-surface-raised, rgba(32, 32, 32, 0.98));
+  box-shadow: var(--dsw-shadow-1, 0 1px 4px rgba(0, 0, 0, 0.25));
+}
+
+.findInput {
+  width: 9em;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.findInput::placeholder {
+  color: var(--dsw-alias-text-tertiary, rgba(128, 128, 128, 0.9));
+}
+
+.findCount {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-text-secondary, rgba(160, 160, 160, 0.9));
+  white-space: nowrap;
+}
+
+.findError {
+  color: var(--dsw-alias-danger, rgb(224, 96, 96));
+}
+
+.findToggle,
+.findTool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  border: none;
+  border-radius: var(--dsw-radius-r10, 6px);
+  background: transparent;
+  color: var(--dsw-alias-text-secondary, rgba(160, 160, 160, 0.9));
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.findToggle:hover,
+.findTool:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.18));
+}
+
+.findToggleOn {
+  background: var(--dsw-alias-interactive-bg-active, rgba(128, 128, 128, 0.32));
+  color: var(--dsw-alias-text-primary, inherit);
+}
+
+/* Find marks in the plain body: matched spans draw a quiet fill; the current
+   match's line and its hits draw strongest. */
+.findHit {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.28));
+  border-radius: 2px;
+}
+
+.findHitCurrent,
+.findLine .findHitCurrent {
+  background: var(--dsw-alias-interactive-bg-active, rgba(128, 160, 255, 0.45));
+}
+
+.findLine {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 160, 255, 0.12));
+}

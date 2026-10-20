@@ -9,7 +9,7 @@
  * with the same reload. The type's controls, viewer choice, wrap and reload, sit at the end of
  * the path row; the Sidebar's strip carries none of them.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -21,10 +21,11 @@ import {
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { TextInjected } from './face.ts'
 import { emptyFailureRecourse, failureLine } from './failure-line.ts'
+import { FindBar } from './FindBar.tsx'
 import { LoadingIndicator } from './LoadingIndicator.tsx'
 import { hostFileOf } from './rpc.ts'
 import type { TextStore } from './store.ts'
-import type { DocumentContent } from './document/contract.ts'
+import type { DocumentContent, DocumentFindMarks } from './document/contract.ts'
 import { binaryDocumentPath, matchingDocumentPreviews } from './document/registry.ts'
 import type { DocumentPreviewDefinition } from './document/registry.ts'
 import { unviewableBinaryPath } from './document/unviewable.ts'
@@ -38,6 +39,8 @@ export type { LoadedPage } from './text/lines.ts'
 /** Private registration inputs; the framework binds the registry source to useDocumentPreviews. */
 export interface TextPreviewInjected extends TextInjected {
   readonly hooks: { readonly documentPreviews: ObservableSnapshot<readonly DocumentPreviewDefinition[]> }
+  /** The find command's open request, consumed only by the body holding focus. */
+  readonly findRequest: ObservableSnapshot<number>
 }
 
 /** The body's composed props: the tab, its navigation, the shared store and face, and copy. */
@@ -55,11 +58,13 @@ export type TextPreviewProps =
  */
 export function TextPreview({
   useTabInfo, useResource, useStore, actions, loadPage, reloadPages,
-  loadAll, reloadAll, prepareRenderer, useDocumentPreviews, renderSlot, t,
+  loadAll, reloadAll, prepareRenderer, runFind, useDocumentPreviews, findRequest, renderSlot, t,
   addResource, setResources,
 }: TextPreviewProps): ReactNode {
   const { tab } = useTabInfo()
   const { navigation, signal } = tab
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [findFocus, setFindFocus] = useState(0)
   const meta = useResource<'file'>(tab.contentId)
   const canRead = meta.status !== 'none'
   const file = useMemo(() => hostFileOf(tab.contentId), [tab.contentId])
@@ -159,6 +164,45 @@ export function TextPreview({
     selected?.id, mode, file, canRead, meta.value?.version,
   ])
 
+  // The find command opens the bar in the body that holds focus: every mounted
+  // text tab sees the request, and only the focused one answers.
+  const findRequested = useSyncExternalStore(
+    listener => findRequest.subscribe(listener),
+    () => findRequest.getSnapshot(),
+  )
+  useEffect(() => {
+    if (findRequested === 0) return
+    const root = rootRef.current
+    if (root === null || !root.contains(document.activeElement)) return
+    actions.findOpened(tab.id)
+    setFindFocus(findRequested)
+  }, [findRequested, actions, tab.id])
+
+  // Land the find bar's current match exactly like a line navigation: a match
+  // beyond the loaded pages loads the next page until covered or the file
+  // ends; a held match scrolls to once, remembered so unrelated writes cannot
+  // re-land it.
+  const find = state?.find
+  const findMatch = find !== undefined && find.index >= 0 ? find.matches[find.index] : undefined
+  useEffect(() => {
+    const body = scrollportRef.current
+    if (body === null || mode !== 'text-pages' || current === undefined || findMatch === undefined) return
+    if (findMatch.lineNumber > loadedThrough && !current.eof) {
+      if (!current.loading && current.failure === undefined && canRead) {
+        loadPage(tab.id, file, loadedThrough + 1, signal, meta.value?.version)
+      }
+      return
+    }
+    if (find?.index === find?.landed) return
+    if (scrollToLine(body, findMatch.lineNumber)) {
+      actions.findLanded(tab.id)
+      actions.scrolled(tab.id, body.scrollTop)
+    }
+  }, [
+    findMatch?.lineNumber, find?.index, find?.landed, find, loadedThrough, current?.eof, current?.loading,
+    current?.failure, mode, canRead, file, tab.id, loadPage, signal, meta.value?.version, actions,
+  ])
+
   const rendererReload = useCallback((): void => {
     if (canRead && selected !== undefined) prepareRenderer(tab.id, signal, selected.id, meta.value?.version, true)
   }, [canRead, prepareRenderer, tab.id, signal, selected?.id, meta.value?.version])
@@ -192,6 +236,28 @@ export function TextPreview({
     if (current === undefined || loaded.length === 0) return undefined
     return { kind: 'text', pages: loaded, text: loaded.filter(page => page.lines > 0).map(page => page.text).join('\n'), eof: current.eof }
   }, [mode, loaded, current?.complete, current?.eof, current?.loadRevision, rendererReload, actions, tab.id])
+
+  // Marks the selected body can draw while the bar holds settled matches;
+  // bodies that cannot mark (images, PDFs) simply ignore them.
+  const findOpen = mode === 'text-pages' && state?.findOpen === true
+  const findMarks = useMemo<DocumentFindMarks | undefined>(() => {
+    if (!findOpen || find === undefined || find.matches.length === 0) return undefined
+    const spansByLine = new Map<number, { start: number; end: number }[]>()
+    for (const match of find.matches) {
+      const spans = spansByLine.get(match.lineNumber) ?? []
+      spans.push({ start: match.start, end: match.end })
+      spansByLine.set(match.lineNumber, spans)
+    }
+    return { spansByLine, currentLine: findMatch?.lineNumber }
+  }, [findOpen, find, findMatch?.lineNumber])
+  const runCurrentFind = useCallback((): void => {
+    if (find === undefined || find.query.length === 0) return
+    runFind(tab.id, file, {
+      query: find.query,
+      ...find.caseSensitive ? { caseSensitive: true } : {},
+      ...find.regex ? { regex: true } : {},
+    }, signal)
+  }, [runFind, find?.query, find?.caseSensitive, find?.regex, tab.id, file, signal])
 
   // A known binary suffix with no matching renderer never reads: no plain-text
   // fallback, no viewer control, only the path, the unsupported line, and the
@@ -230,7 +296,7 @@ export function TextPreview({
     loadPage(tab.id, file, next, signal, meta.value?.version)
   }
   return (
-    <div className={css.preview} data-textpreview-state="text" data-textpreview-url={tab.contentId} data-document-preview={selected.id}>
+    <div ref={rootRef} className={css.preview} data-textpreview-state="text" data-textpreview-url={tab.contentId} data-document-preview={selected.id}>
       {meta.failure !== undefined && hasContent
         ? (
           // The file's metadata failed — gone, or its workspace unknown — which
@@ -340,12 +406,39 @@ export function TextPreview({
             && body.scrollTop + body.clientHeight >= body.scrollHeight - 1) loadNext()
         }}
       >
+        {findOpen && find !== undefined && (
+          <FindBar
+            find={find}
+            focusRequest={findFocus}
+            onQuery={(query) => { actions.findEdited(tab.id, query) }}
+            onToggle={(flag) => {
+              actions.findToggled(tab.id, flag)
+              if (find.query.length === 0) {
+                return
+              }
+              // The run names the flags the toggle is moving to, which this
+              // render's props cannot see yet.
+              const caseSensitive = flag === 'caseSensitive' ? !find.caseSensitive : find.caseSensitive
+              const regex = flag === 'regex' ? !find.regex : find.regex
+              runFind(tab.id, file, {
+                query: find.query,
+                ...caseSensitive ? { caseSensitive: true } : {},
+                ...regex ? { regex: true } : {},
+              }, signal)
+            }}
+            onRun={runCurrentFind}
+            onStep={(delta) => { actions.findStepped(tab.id, delta) }}
+            onClose={() => { actions.findClosed(tab.id) }}
+            t={t}
+          />
+        )}
         {mode !== 'renderer' && !hasContent && current?.failure === undefined && (
           <LoadingIndicator label={t('loading')} />
         )}
         {content !== undefined && renderSlot('sidebar.right.tab.document', {
           resourceAddress: tab.contentId, content, wrap: state.wrap, scrollportRef: bindScrollport,
           addResource: add, setResources: set,
+          ...findMarks === undefined ? {} : { find: findMarks },
         }, {
           entryKey: selected.id, hookContext: useTabInfo,
           fallback: <p className={css.statusLine}>{t('rendererUnavailable', { name: selected.title() })}</p>,

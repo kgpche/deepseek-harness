@@ -19,6 +19,7 @@ Preview files in the right Sidebar and choose among registered renderers. Markdo
 - [Excel preview](#excel-preview)
 - [Office preview](#office-preview)
 - [Navigation](#navigation)
+- [Find](#find)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -124,6 +125,10 @@ The page refresh shortcut reuses the selected preview’s reload operation, incl
 ## Navigation
 
 `ctx.sidebarRight.openResource(address, { params: { line } })` carries a 1-based source line through the `file` parameters. In `text-pages` mode, the owner loads sequential pages until that line or EOF. Plain-text and code renderers expose source-line anchors; Markdown does not. A navigation remains pending while its selected renderer has no anchor and runs if the user switches to plain text or code. Code navigation scrolls the inner source viewport directly. Byte-mode renderers do not consume source-line navigation. Each completed navigation revision is answered once. Opening the same file without `revealIfOpened: false` focuses its existing tab and delivers a new revision.
+
+## Find
+
+The `document.find` command (`primary+KeyF` on desktop profiles, `primary+alt+KeyF` on web:macos and web:windows, where a bare browser-reserved `primary+KeyF` default cannot register; web:linux admits none of those pairs, so it takes the admissible `primary+shift+Period`) opens a VSCode-style find bar over the focused `text-pages` body; bodies in another mode or without focus do not answer. Typing debounces 200 ms into the Host's `find` (literal, case-insensitive by default); the bar's toggles and `Alt+C`/`Alt+R` rerun case-sensitive and regular-expression queries immediately. `Enter` steps forward, `Shift+Enter` back, with wrap-around; `Escape` closes. The count reads `current / total` with `+` when the Host's result cap cut the scan, and a failed run shows beside it. The plain body marks matched spans in-line with the current match strongest; the code body marks whole lines (shiki owns the tokens inside them). Stepping to a match beyond the loaded pages loads pages until it is held, exactly like line navigation, and the landing is remembered so unrelated writes do not re-scroll. Results retire on any edit, toggle, reload, or file-version change; the query stays for a re-run, and a settlement for a request the bar has left behind is dropped.
 
 <a id="model-experience"></a>
 ## Model Experience

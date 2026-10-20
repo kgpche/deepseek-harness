@@ -37,6 +37,9 @@ import type {
   WorkspaceDirectoryEntry,
   WorkspaceDirectoryListing,
   WorkspaceFileBytes,
+  WorkspaceFileFind,
+  WorkspaceFileFindRequest,
+  WorkspaceFileMatch,
   WorkspaceFileRange,
   WorkspaceFileStat,
   WorkspaceFileText,
@@ -83,6 +86,8 @@ export interface Config {
   readonly maxLines: number
   /** Cap on returned directory entries; the rest is dropped and reported cut. */
   readonly maxEntries: number
+  /** Cap on returned find matches; the scan stops there and reports itself cut. */
+  readonly maxFindResults: number
 }
 
 /** One page cut from a decoded text stream. */
@@ -160,6 +165,95 @@ async function cutPage(
   return { text: lines.join('\n'), lines: lines.length, eof: true }
 }
 
+/** Longest line preview a find match carries, in code units. */
+const FIND_LINE_PREVIEW = 200
+
+/** One match's span within a line, in code-unit offsets. */
+interface LineSpan { readonly start: number; readonly end: number }
+
+/**
+ * Build the per-line matcher a {@link find} request names.
+ * @param request - the query and its matching options.
+ * @returns the matcher reporting each occurrence's span within one line.
+ * @throws RemoteError `gateway/bad-request` for an empty query or an invalid
+ *   regular expression, before any file is opened.
+ */
+function findMatcher(request: WorkspaceFileFindRequest): (line: string) => readonly LineSpan[] {
+  if (request.query.length === 0) {
+    throw new RemoteError('gateway/bad-request', 'query must not be empty', {})
+  }
+  if (request.regex === true) {
+    let pattern: RegExp
+    try {
+      pattern = new RegExp(request.query, `g${request.caseSensitive === true ? '' : 'i'}`)
+    } catch (error: unknown) {
+      /* v8 ignore next 2 -- only a SyntaxError from an invalid pattern reaches here; any other throw is a runtime fault. */
+      if (!(error instanceof SyntaxError)) throw error
+      throw new RemoteError('gateway/bad-request', `query is not a valid regular expression: ${error.message}`, {})
+    }
+    return line => [...line.matchAll(pattern)].map(match => match.index === undefined
+      ? { start: 0, end: 0 }
+      : { start: match.index, end: match.index + match[0].length })
+  }
+  const needle = request.caseSensitive === true ? request.query : request.query.toLowerCase()
+  return (line) => {
+    const haystack = request.caseSensitive === true ? line : line.toLowerCase()
+    const spans: LineSpan[] = []
+    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + needle.length)) {
+      spans.push({ start: at, end: at + needle.length })
+    }
+    return spans
+  }
+}
+
+/**
+ * Scan decoded chunks for the matcher's hits line by line. Like
+ * {@link cutPage}, only the current line is ever buffered, so the file is never
+ * held whole; the scan stops the moment the result cap is reached and reports
+ * itself cut, because more matches may lie past the stop.
+ * @param chunks - the file's decoded text chunks.
+ * @param matcher - per-line occurrence reporter.
+ * @param limit - largest number of matches to collect.
+ * @returns the matches in file order and whether the cap stopped the scan.
+ */
+async function scanFindMatches(
+  chunks: AsyncIterable<string>,
+  matcher: (line: string) => readonly LineSpan[],
+  limit: number,
+): Promise<Pick<WorkspaceFileFind, 'matches' | 'truncated'>> {
+  const matches: WorkspaceFileMatch[] = []
+  const record = (lineNumber: number, line: string): boolean => {
+    for (const { start, end } of matcher(line)) {
+      matches.push({ lineNumber, start, end, line: line.length > FIND_LINE_PREVIEW ? line.slice(0, FIND_LINE_PREVIEW) : line })
+      if (matches.length >= limit) return false
+    }
+    return true
+  }
+  let current = ''
+  let lineNumber = 0
+  scan: for await (const chunk of chunks) {
+    let position = 0
+    while (position < chunk.length) {
+      const newline = chunk.indexOf('\n', position)
+      if (newline === -1) { current += chunk.slice(position); break }
+      current += chunk.slice(position, newline)
+      lineNumber += 1
+      // The cap check runs before `current` clears, so the tail block below
+      // cannot double-record the line the scan stopped on.
+      const stopped = !record(lineNumber, current)
+      current = ''
+      if (stopped) break scan
+      position = newline + 1
+    }
+  }
+  // A pending line without a terminator is the file's last.
+  if (current.length > 0) {
+    lineNumber += 1
+    record(lineNumber, current)
+  }
+  return { matches, truncated: matches.length >= limit }
+}
+
 /**
  * Workspace path of `target` relative to `root`, derived from the two canonical
  * `file:` URIs so the answer is `/`-joined on every platform. Empty for the root.
@@ -189,6 +283,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     maxFileBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER - 1).default(32 * 1024 * 1024),
     maxLines: z.number().step(1).min(1).default(5000),
     maxEntries: z.number().step(1).min(1).default(2000),
+    maxFindResults: z.number().step(1).min(1).default(500),
   })
 
   private readonly feed: WorkspaceChangeFeed
@@ -245,6 +340,36 @@ export class WorkspaceFiles extends TypertRemoteService {
       throw new RemoteError('workspace-file/not-text', `"${path}" contains NUL bytes`, { path })
     }
     return { ...this.statOf(target, info), offset, text: page.text, lines: page.lines, eof: page.eof }
+  }
+
+  /**
+   * Find query matches across a whole text file, line by line.
+   * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
+   * @param path - absolute path or path relative to the workspace root; files outside it are allowed.
+   * @param request - the query and its matching options.
+   * @param signal - caller cancellation.
+   * @returns the matches in file order, cut to the configured result cap, with the file's version and size.
+   */
+  @Remote
+  async find(
+    workspaceFileScope: WorkspaceFileScope,
+    path: string,
+    request: WorkspaceFileFindRequest,
+    signal: AbortSignal,
+  ): Promise<WorkspaceFileFind> {
+    // Validate the request before any file is opened: a wiring mistake in the
+    // query costs no I/O.
+    const matcher = findMatcher(request)
+    const { target, info } = await this.locateFile(workspaceFileScope, path, signal)
+    try {
+      const scan = await scanFindMatches(await this.ctx.fs.streamText(target, signal), matcher, this.config.maxFindResults)
+      return { ...this.statOf(target, info), matches: scan.matches, truncated: scan.truncated }
+    } catch (error: unknown) {
+      if (isNotTextRefusal(error)) {
+        throw new RemoteError('workspace-file/not-text', `"${path}" is not decodable text`, { path }, { cause: error })
+      }
+      throw error
+    }
   }
 
   /**

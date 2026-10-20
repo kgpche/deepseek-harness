@@ -33,6 +33,7 @@ Mount the package beside `dsh-fs`, `dsh-sandbox-policy`, the Session store, and 
 | `read(path, { offset?, limit? })` | `WorkspaceFileText` = stat + `{ offset, text, lines, eof }` | One window of lines from a text file (UTF-8, or UTF-16 LE/BE named by a byte order mark); `lines` counts them, so one empty line and a page past the end read differently |
 | `readBytes(path, { range?, baseFile? })` | `WorkspaceFileBytes` = stat + `{ offset, data, eof }` | Complete file or bounded byte range as `Uint8Array`; optionally resolve from another file's directory |
 | `list(path)` | `WorkspaceDirectoryListing { path, entries, truncated }` | Direct children of one directory |
+| `find(path, request)` | `WorkspaceFileFind` = stat + `{ matches, truncated }` | Query matches across a whole text file (same encodings as `read`): literal by default, case-sensitive or regular expression on request, cut to `maxFindResults` |
 | `changes(path)` | stream of `WorkspaceFileWatchFrame` | Subscription readiness, then invalidations of one file or a directory's direct entries |
 
 ### Addressing and paths
@@ -51,7 +52,7 @@ Pass the required options object as `{}` for a complete file under `maxFileBytes
 
 ### File-read and directory checks
 
-Every operation first uses `lstat` to reject a missing path or the wrong file kind; the file-reading operations also refuse a final symlink, even one pointing back inside the workspace. `list` instead follows a final link — a directory symlink on any platform, including a Windows junction — and requires it to resolve to a directory inside the workspace root, so a linked directory lists like its target; `changes` confines the watched directory the same way. File operations then resolve and read through the composed filesystem without an additional workspace-containment check. The configured page, window, complete-file, and listing caps still apply. Text pages decode UTF-8 and byte-order-marked UTF-16 LE/BE and reject anything else, including NUL bytes on the page; byte reads do not decode content. An empty read or listing path is a `gateway/bad-request`.
+Every operation first uses `lstat` to reject a missing path or the wrong file kind; the file-reading operations also refuse a final symlink, even one pointing back inside the workspace. `list` instead follows a final link — a directory symlink on any platform, including a Windows junction — and requires it to resolve to a directory inside the workspace root, so a linked directory lists like its target; `changes` confines the watched directory the same way. File operations then resolve and read through the composed filesystem without an additional workspace-containment check. `find` scans the file once through the same text decoding as `read`, keeping only the current line in memory, and reports each match's 1-based line and in-line span; an empty query or invalid regular expression is a `gateway/bad-request` before any file is opened, and a matched line previews to 200 code units. The configured page, window, complete-file, listing, and find-result caps still apply. Text pages decode UTF-8 and byte-order-marked UTF-16 LE/BE and reject anything else, including NUL bytes on the page; byte reads do not decode content. An empty read or listing path is a `gateway/bad-request`.
 
 ### The change feed
 

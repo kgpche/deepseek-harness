@@ -29,6 +29,14 @@ export type DocumentContent =
     readonly reload: () => void
   }
 
+/** What the owner's find bar reports to bodies that can mark matches. */
+export interface DocumentFindMarks {
+  /** Match spans by 1-based line; a line without a match is absent. */
+  readonly spansByLine: ReadonlyMap<number, readonly { readonly start: number; readonly end: number }[]>
+  /** The 1-based line the current match lies on, when one is current. */
+  readonly currentLine: number | undefined
+}
+
 /** Content and viewing inputs shared by document bodies and nested PDF presentation. */
 export interface DocumentBodyOwner {
   /** Observe a file read by this renderer. @param address - complete file resource address. */
@@ -43,6 +51,8 @@ export interface DocumentBodyOwner {
   readonly wrap: boolean
   /** Report a renderer-owned scrollport; passing `null` restores the shared body as the owner. */
   readonly scrollportRef: RefCallback<HTMLElement>
+  /** Live find marks, while the owner's find bar holds results; bodies without marks ignore it. */
+  readonly find?: DocumentFindMarks
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
