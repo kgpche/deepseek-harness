@@ -60,13 +60,37 @@
   overflow-wrap: anywhere;
 }
 
-/* Find marks name whole lines in the code renderer (shiki owns the tokens
-   inside them); the current match draws strongest, matching the plain body. */
+/*
+ * Find marks, two levels with VSCode-derived colors: the in-line fill is the
+ * primary signal (other matches translucent orange, the current match a solid
+ * block that flips with the theme); the line fill stays a quiet locator behind
+ * it. The in-line fill paints through the CSS Custom Highlight API over
+ * ranges built in find-ranges.ts; the data attributes carry the line level.
+ */
 [data-code-find-hit] {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.18));
+  background: rgb(0 0 0 / 4%);
 }
 
 [data-code-find-current] {
-  background: var(--dsw-alias-interactive-bg-active, rgba(128, 128, 128, 0.32));
-  outline: 1px solid var(--dsw-alias-focus-border, rgba(128, 160, 255, 0.6));
+  background: rgb(59 130 246 / 8%);
+}
+
+::highlight(dsh-find-hit) {
+  background-color: rgb(234 92 0 / 33%);
+}
+
+::highlight(dsh-find-current) {
+  background-color: #a8ac94;
+}
+
+body[data-ds-dark-theme] [data-code-find-hit] {
+  background: rgb(255 255 255 / 5%);
+}
+
+body[data-ds-dark-theme] [data-code-find-current] {
+  background: rgb(122 170 255 / 10%);
+}
+
+body[data-ds-dark-theme] ::highlight(dsh-find-current) {
+  background-color: #515c6a;
 }

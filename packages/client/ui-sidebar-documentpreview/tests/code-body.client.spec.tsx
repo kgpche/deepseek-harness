@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /** Accumulated document rendering through the real streaming CodeBlock. */
 import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -73,7 +74,8 @@ function installStyles(): void {
 
 describe('CodeBody', () => {
   it('rejects a malformed file address without starting the highlighter', () => {
-    expect(() => CodeBody(props(contents(['plain'], true), { resourceAddress: 'not-a-file-address' }))).toThrow('not a file address')
+    // Rendered, not called: the body's hooks run before its address contract.
+    expect(() => render(createElement(CodeBody, props(contents(['plain'], true), { resourceAddress: 'not-a-file-address' })))).toThrow('not a file address')
   })
 
   it.each([
