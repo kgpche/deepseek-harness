@@ -313,11 +313,11 @@
    own box the same way, so the strip row never drags the window over it. Hidden
    surfaces contribute nothing: Blink skips non-visible boxes when it collects
    draggable regions. */
-:global(html[data-platform='darwin']) .stripTabs,
-:global(html[data-platform='darwin']) .stripChrome,
-:global(html[data-platform='darwin']) .paneBody,
-:global(html[data-platform='darwin']) .float,
-:global(html[data-platform='darwin']) .divider {
+:global(html:is([data-platform='darwin'], [data-platform='linux'])) .stripTabs,
+:global(html:is([data-platform='darwin'], [data-platform='linux'])) .stripChrome,
+:global(html:is([data-platform='darwin'], [data-platform='linux'])) .paneBody,
+:global(html:is([data-platform='darwin'], [data-platform='linux'])) .float,
+:global(html:is([data-platform='darwin'], [data-platform='linux'])) .divider {
   -webkit-app-region: no-drag;
 }
 

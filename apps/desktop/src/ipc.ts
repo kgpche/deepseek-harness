@@ -26,6 +26,9 @@ export const DESKTOP_IPC = {
   localeChanged: 'dsh-desktop:locale-changed',
   updatesStatus: 'dsh-desktop:updates-status',
   updatesOpen: 'dsh-desktop:updates-open',
+  windowMinimize: 'dsh-desktop:window-minimize',
+  windowToggleMaximize: 'dsh-desktop:window-toggle-maximize',
+  windowClose: 'dsh-desktop:window-close',
   updatesPresentation: 'dsh-desktop:updates-presentation',
   nativeThemeSet: 'dsh-desktop:native-theme-set',
   windowFullscreen: 'dsh-desktop:window-fullscreen',
@@ -68,12 +71,22 @@ export interface DesktopUpdatePresentation {
   readonly failure?: DesktopUpdateFailureKind
 }
 
+/** Frameless-window controls, drawn by the client's own chrome on platforms without a native title bar. */
+export interface DesktopWindowApi {
+  minimize(): Promise<void>
+  /** Restore when maximized, maximize when not; a no-op in fullscreen. */
+  toggleMaximize(): Promise<void>
+  /** Starts the window's normal close path, including any close confirmation. */
+  close(): Promise<void>
+}
+
 /** Product documents cannot supply update versions, package URLs, or installation authorization. */
 export interface DshDesktopProductApi {
   readonly protocolVersion: 1
   readonly browser: DesktopBrowserBridge
   readonly keyboard: DesktopKeyboardApi
   readonly shortcuts: DesktopShortcutsApi
+  readonly window: DesktopWindowApi
   /**
    * Local machine description for the feedback questionnaire.
    * @returns `name=value` fields separated by `; `, with no hostname, user name, or serial number.

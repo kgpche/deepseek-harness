@@ -288,3 +288,38 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+/* Client-drawn window controls (Linux frameless): the cluster floats at the
+   frame's top-right corner over the chrome row that drags the window there,
+   subtracting itself from the drag through the interactive-control rule. */
+.windowControls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+}
+
+.windowButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, inherit);
+  cursor: default;
+}
+
+.windowButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgb(128 128 128 / 18%));
+  color: var(--dsw-alias-label-primary, inherit);
+}
+
+.windowClose:hover {
+  background: var(--dsw-alias-danger, #e2483d);
+  color: #fff;
+}

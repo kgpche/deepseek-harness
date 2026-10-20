@@ -60,7 +60,7 @@ export interface WindowDragRecallOptions {
  */
 export function installWindowDragRecall(options: WindowDragRecallOptions): () => void {
   const doc = options.document
-  if (doc.documentElement.dataset.platform !== 'darwin') return () => {}
+  if (doc.documentElement.dataset.platform !== 'darwin' && doc.documentElement.dataset.platform !== 'linux') return () => {}
   const scheduleFrame = options.scheduleFrame ?? defaultScheduleFrame
   const watchBox = options.watchBox ?? defaultWatchBox
   /** The last frame's measurement per row, the baseline a change is read against. */

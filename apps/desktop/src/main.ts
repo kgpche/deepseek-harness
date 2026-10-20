@@ -58,6 +58,7 @@ import { DesktopUpdateDialog, type UpdateDialogOptions } from './update-dialog.t
 import { readDesktopRuntime } from './runtime-tree.ts'
 import { DesktopBrowserGuests } from './browser-guests.ts'
 import { installDesktopShortcuts } from './keyboard.ts'
+import { installWindowControls } from './window-controls.ts'
 import { DesktopUpdateOverlays } from './update-overlay.ts'
 import { DesktopQuitConfirmation } from './quit-confirmation.ts'
 import { DesktopTray } from './tray.ts'
@@ -221,6 +222,10 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
         symbolColor: nativeTheme.shouldUseDarkColors ? '#f9fafb' : '#0f1115' },
     } : {}),
+    // Linux has no titleBarOverlay; the native frame would spend a whole bar on
+    // the window title, so the window goes frameless and the client's own
+    // chrome draws the controls (the drag regions it already owns).
+    ...(process.platform === 'linux' && primary ? { titleBarStyle: 'hidden' as const } : {}),
     // hiddenInset places traffic lights inside the sidebar; sidebar vibrancy
     // needs a transparent window background to show through the page.
     ...(process.platform === 'darwin' ? {
@@ -689,7 +694,8 @@ async function main(): Promise<void> {
   installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
-  app.on('will-quit', () => { shortcuts.dispose() })
+  const windowControls = installWindowControls()
+  app.on('will-quit', () => { shortcuts.dispose(); windowControls() })
 
   ipcMain.handle(DESKTOP_IPC.boot, async (event) => {
     assertDesktopSender(event, ['app'])

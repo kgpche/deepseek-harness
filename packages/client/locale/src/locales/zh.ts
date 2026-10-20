@@ -3,6 +3,8 @@ export const zh = {
   'ok': '确定',
   'cancel': '取消',
   'close': '关闭',
+  'window.minimize': '最小化',
+  'window.maximize': '最大化或还原',
   'copy': '复制',
   'copied': '复制成功',
   'codeBlock.title': '代码块',

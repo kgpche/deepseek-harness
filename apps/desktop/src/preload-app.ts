@@ -14,6 +14,11 @@ function createProductApi(): DshDesktopProductApi {
   return {
     protocolVersion: 1,
     browser: createDesktopBrowserBridge(),
+    window: {
+      minimize: () => ipcRenderer.invoke(DESKTOP_IPC.windowMinimize) as Promise<void>,
+      toggleMaximize: () => ipcRenderer.invoke(DESKTOP_IPC.windowToggleMaximize) as Promise<void>,
+      close: () => ipcRenderer.invoke(DESKTOP_IPC.windowClose) as Promise<void>,
+    },
     deviceInfo: () => ipcRenderer.invoke(DESKTOP_IPC.deviceInfo) as Promise<string>,
     keyboard: {
       closeWindow: revision => ipcRenderer.invoke(DESKTOP_IPC.shortcutsCloseWindow, revision) as Promise<void>,

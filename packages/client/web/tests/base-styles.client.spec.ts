@@ -43,8 +43,9 @@ describe('web shell base.css', () => {
     // One source for the selector: the model constant. The darwin rule must
     // declare the same list, so a new interactive role is added in one place
     // and a drift between the sheet and the composition model fails here.
-    const rule = /html\[data-platform='darwin'\] :is\(([^)]*)\)\s*\{[^}]*app-region:\s*no-drag/.exec(normalizedCss)
-    expect(rule, 'base.css declares no darwin interactive no-drag rule').not.toBeNull()
+    const framelessRule = /html:is\(\[data-platform='darwin'\], \[data-platform='linux'\]\) :is\(([^)]*)\)/
+    const rule = new RegExp(framelessRule.source + /\s*\{[^}]*app-region:\s*no-drag/.source).exec(normalizedCss)
+    expect(rule, 'base.css declares no frameless interactive no-drag rule').not.toBeNull()
     const declared = rule![1]!.split(',').map(part => part.trim()).join(', ')
     expect(declared).toBe(INTERACTIVE_SELECTOR)
   })
@@ -55,7 +56,7 @@ describe('web shell base.css', () => {
     // has to declare drag per row. The ui-theme app-region gate holds the other
     // half — that this is the only darwin drag rule in the package tree.
     expect(normalizedCss).toContain(
-      "html[data-platform='darwin'] [data-window-drag] { -webkit-app-region: drag; }",
+      "html:is([data-platform='darwin'], [data-platform='linux']) [data-window-drag] { -webkit-app-region: drag; }",
     )
   })
 
@@ -66,7 +67,7 @@ describe('web shell base.css', () => {
     // marks inside it still win in document order, so the pulse changes what
     // Electron collects without changing the composed surface.
     expect(normalizedCss).toContain(
-      "html[data-platform='darwin'] [data-window-drag-recall] { -webkit-app-region: no-drag; }",
+      "html:is([data-platform='darwin'], [data-platform='linux']) [data-window-drag-recall] { -webkit-app-region: no-drag; }",
     )
   })
 

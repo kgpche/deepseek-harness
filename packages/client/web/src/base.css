@@ -44,7 +44,8 @@ html[data-platform='darwin'] body {
   isolation: isolate;
 }
 
-/* macOS desktop: the one drag declaration. A chrome row marks itself in markup
+/* Frameless desktops (macOS inset lights, Linux hidden title bar): the one drag
+   declaration. A chrome row marks itself in markup
    (`data-window-drag`) and its own box becomes its draggable geometry, so no fixed
    band has to match any row's height; the ui-theme app-region gate's CHROME_ROWS
    manifest is the list of rows that must carry the mark. Electron composes
@@ -52,7 +53,7 @@ html[data-platform='darwin'] body {
    otherwise drag the window instead of receiving clicks; every covering overlay
    portals to document.body beside #root, which also puts it after every drag row
    in document order, and one rule subtracts them all. */
-html[data-platform='darwin'] [data-window-drag] {
+html:is([data-platform='darwin'], [data-platform='linux']) [data-window-drag] {
   -webkit-app-region: drag;
 }
 
@@ -64,11 +65,11 @@ html[data-platform='darwin'] [data-window-drag] {
    is the body's own: the row marks inside still declare drag and win over it in
    document order, so the pulse changes nothing about the composed surface — it
    only makes Electron collect it again. */
-html[data-platform='darwin'] [data-window-drag-recall] {
+html:is([data-platform='darwin'], [data-platform='linux']) [data-window-drag-recall] {
   -webkit-app-region: no-drag;
 }
 
-html[data-platform='darwin'] body > :not(#root) {
+html:is([data-platform='darwin'], [data-platform='linux']) body > :not(#root) {
   -webkit-app-region: no-drag;
 }
 
@@ -79,7 +80,7 @@ html[data-platform='darwin'] body > :not(#root) {
    content container, which would override every overlay mounted earlier in the
    DOM. One selector on the native elements, ARIA roles, and tabindexed custom
    widgets replaces per-component no-drag opt-outs. */
-html[data-platform='darwin'] :is(
+html:is([data-platform='darwin'], [data-platform='linux']) :is(
   button, a, input, select, textarea, summary, [contenteditable='true'], [tabindex],
   [role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox'], [role='tooltip'],
   [role='button'], [role='link'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'],

@@ -5,6 +5,8 @@ export const en = {
   'ok': 'OK',
   'cancel': 'Cancel',
   'close': 'Close',
+  'window.minimize': 'Minimize',
+  'window.maximize': 'Maximize or restore',
   'copy': 'Copy',
   'copied': 'Copied',
   'codeBlock.title': 'Code block',
