@@ -1,0 +1,133 @@
+# Fork-only unsigned desktop release builder.
+#
+# The upstream pipeline signs on self-hosted runners with hardware tokens
+# (SafeNet eToken on Windows, Apple notarization on macOS); this fork has
+# none of that, so every target builds unsigned on GitHub-hosted runners —
+# `--unsigned` skips policy configuration and signing credentials entirely,
+# and Electron / Node runtimes download from their public sources. Linux
+# needs no signing; Windows shows SmartScreen and macOS needs Gatekeeper
+# bypass (the release notes this workflow publishes explain both).
+name: Desktop Release (fork, unsigned)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release 标签：如 v0.2.1-rc.2-fork1；留空使用 fork-<产品版本>'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: windows-latest, target: win-x64 }
+          - { os: macos-latest, target: mac-arm64 }
+          - { os: macos-latest, target: mac-x64 }
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5.0.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build artifacts and the web client
+        run: |
+          pnpm run build:artifacts
+          pnpm run build:web
+      - name: Package unsigned installer
+        working-directory: apps/desktop
+        run: pnpm run package -- ${{ matrix.target }} --unsigned
+      - name: Collect installers
+        if: success()
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          mkdir -p "${{ runner.temp }}/installers"
+          find .desktop-build/targets/${{ matrix.target }} -type f \( -name '*.deb' -o -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' \) \
+            -exec cp {} "${{ runner.temp }}/installers/" \;
+          ls -lh "${{ runner.temp }}/installers"
+      - uses: actions/upload-artifact@v7.0.1
+        if: success()
+        with:
+          name: installer-${{ matrix.target }}
+          path: ${{ runner.temp }}/installers/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: logs-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 7
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: |
+          tag="$REQUESTED_TAG"
+          if [ -z "$tag" ]; then tag="fork-$(node -p "require('./package.json').version")"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v7.0.1
+        with:
+          pattern: installer-*
+          merge-multiple: true
+          path: installers
+      - name: List collected installers
+        run: ls -lh installers
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          notes=$(cat <<'NOTES'
+          DeepSeek Harness — fork build (unsigned)
+
+          Enhancements over upstream: Linux desktop support (deb), frameless
+          Linux window with traffic-light controls, VSCode-style workspace
+          file browsing (split panes, preview/pin, find in file), UTF-16/BOM
+          file viewing.
+
+          - **Linux (deb)**: `sudo dpkg -i *.deb` — no signing needed.
+          - **Windows (exe)**: unsigned — SmartScreen will warn; choose
+            "More info" → "Run anyway".
+          - **macOS (dmg/zip)**: unsigned — Gatekeeper blocks first launch;
+            run `xattr -cr "/Applications/DeepSeek Harness.app"` (or the
+            equivalent path where you installed it) once.
+
+          For signed macOS/Windows builds use the official upstream releases.
+          NOTES
+          )
+          gh release create "$TAG" installers/* --title "$TAG" --notes "$notes" --prerelease
