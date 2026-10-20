@@ -11,6 +11,28 @@ import type { ReactNode } from 'react'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import css from './AppFrame.module.css'
 
+/** The macOS glyphs, drawn as vectors: the shell fonts render these code points full-width or not at all. */
+const glyph = {
+  /** Close: two crossing diagonals. */
+  close: (
+    <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+      <path d="M1.2 1.2l5.6 5.6M6.8 1.2L1.2 6.8" stroke="currentColor" strokeWidth="1.1" fill="none" />
+    </svg>
+  ),
+  /** Minimize: one short horizontal stroke, optically centered. */
+  minimize: (
+    <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+      <path d="M1.2 4h5.6" stroke="currentColor" strokeWidth="1.1" fill="none" />
+    </svg>
+  ),
+  /** Zoom: two filled triangles pointing outward along the diagonal, the NE/SW pair. */
+  maximize: (
+    <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+      <path d="M7.4 0.6v3.2L4.2 0.6zM0.6 7.4V4.2l3.2 3.2z" fill="currentColor" />
+    </svg>
+  ),
+}
+
 /** The slice of the preload bridge the controls call. */
 interface DesktopWindowBridge {
   minimize(): Promise<void>
@@ -41,7 +63,7 @@ export function WindowControls({ t }: WindowControlsProps): ReactNode {
         data-window-control="close"
         onClick={() => { void desktop.close() }}
       >
-        <span className={css.windowGlyph} aria-hidden="true">✕</span>
+        <span className={css.windowGlyph} aria-hidden="true">{glyph.close}</span>
       </button>
       <button
         type="button"
@@ -51,7 +73,7 @@ export function WindowControls({ t }: WindowControlsProps): ReactNode {
         data-window-control="minimize"
         onClick={() => { void desktop.minimize() }}
       >
-        <span className={css.windowGlyph} aria-hidden="true">─</span>
+        <span className={css.windowGlyph} aria-hidden="true">{glyph.minimize}</span>
       </button>
       <button
         type="button"
@@ -61,7 +83,7 @@ export function WindowControls({ t }: WindowControlsProps): ReactNode {
         data-window-control="maximize"
         onClick={() => { void desktop.toggleMaximize() }}
       >
-        <span className={css.windowGlyph} aria-hidden="true">⤢</span>
+        <span className={css.windowGlyph} aria-hidden="true">{glyph.maximize}</span>
       </button>
     </div>
   )
