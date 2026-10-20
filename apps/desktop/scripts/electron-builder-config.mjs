@@ -262,6 +262,9 @@ export function createElectronBuilderConfig(
       // The deb desktop entry and /opt layout name the installed binary after this;
       // the packaged cli/dsh launcher execs it beside the resources directory.
       executableName: 'deepseek-harness',
+      // Matches the desktop file to package.json desktopName, which Electron reports
+      // as the Wayland app_id / WM_CLASS so docks group the running window with this entry.
+      syncDesktopName: true,
       target: ['AppImage', 'deb'],
     },
     deb: {

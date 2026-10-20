@@ -15,7 +15,7 @@ describe('unsigned Linux packaging configuration', () => {
     const config = createElectronBuilderConfig(UNSIGNED_LINUX, 'linux', 'x64')
     expect(config.publish).toBeNull()
     expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
-    expect(config.linux).toMatchObject({ executableName: 'deepseek-harness', target: ['AppImage', 'deb'] })
+    expect(config.linux).toMatchObject({ executableName: 'deepseek-harness', syncDesktopName: true, target: ['AppImage', 'deb'] })
     expect(existsSync(config.linux.icon)).toBe(true)
     expect(() => {
       validateDesktopPackageEnvironment(UNSIGNED_LINUX, { platform: 'linux', arch: 'x64' }, { unsigned: true })

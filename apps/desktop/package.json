@@ -5,6 +5,7 @@
   "private": true,
   "license": "MIT",
   "homepage": "https://deepseek.com/harness",
+  "desktopName": "deepseek-harness",
   "type": "module",
   "main": "lib/main.js",
   "scripts": {
