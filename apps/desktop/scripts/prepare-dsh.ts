@@ -88,16 +88,16 @@ function runPnpm(args: readonly string[]): Promise<void> {
     mkdirSync(config, { recursive: true })
     // A cross-build installs the TARGET platform's optional engines: pnpm
     // picks optional dependencies by the host's os/cpu unless told the target's.
+    // pnpm reads supported-architectures only from a project .npmrc — the
+    // workspace file the runtime build root already owns.
     if (TARGET_PLATFORM !== process.platform) {
-      const configLines = [`supported-architectures.os[]=${TARGET_PLATFORM}`]
-      // pnpm resolves supported-architectures from ONE place; the runtime
-      // package.json is authoritative for os and cpu together.
       const runtimeArch = desktopTargetPlatform(resolveDesktopBuildTarget()).arch
-      configLines.push(`supported-architectures.cpu[]=${runtimeArch === 'arm64' ? 'arm64' : 'x64'}`)
-      writeFileSync(userConfig, `${configLines.join('\n')}\n`)
-    } else {
-      writeFileSync(userConfig, '')
+      const projectNpmrc = join(BUILD_ROOT, '.npmrc')
+      const existing = existsSync(projectNpmrc) ? readFileSync(projectNpmrc, 'utf8') : ''
+      const additions = `supported-architectures.os[]=${TARGET_PLATFORM}\nsupported-architectures.cpu[]=${runtimeArch === 'arm64' ? 'arm64' : 'x64'}\n`
+      writeFileSync(projectNpmrc, existing + additions)
     }
+    writeFileSync(userConfig, '')
     const child = spawn(NODE, [
       '--expose-internals',
       PNPM,
