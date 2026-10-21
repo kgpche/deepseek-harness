@@ -1,9 +1,9 @@
 /** Prepare Desktop resources and publish their versions after every preparation stage succeeds. */
 
 import { execFileSync } from 'node:child_process'
-import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { downloadArtifact } from '@electron/get'
 import extractZip from 'extract-zip'
@@ -23,6 +23,7 @@ type DesktopTarget = ReturnType<typeof desktopTargetPlatform>
 async function prepareElectron({ platform, arch }: DesktopTarget): Promise<string> {
   const require = createRequire(import.meta.url)
   const { version } = require('electron/package.json') as { version: string }
+  const REPOSITORY_ROOT = resolve(import.meta.dirname, '..', '..', '..')
   const archive = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'download:electron',
     () => downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
@@ -30,10 +31,13 @@ async function prepareElectron({ platform, arch }: DesktopTarget): Promise<strin
   // Windows and Linux distributions extract the binary at the archive root; macOS nests it in an app bundle.
   const binaryName = platform === 'win32' ? 'electron.exe' : platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron'
   const executable = join(BUILD_PATHS.electron, binaryName)
-  // A cross-build cannot run a foreign-OS binary; the version comes from the
-  // Electron package itself, which the distribution embeds verbatim.
+  // A cross-build cannot run a foreign-OS binary; the payload's standalone
+  // Node carries the same major the smoke asserts against (primary-runtime
+  // lock), so its version from the lockfile stands in.
   if (platform !== process.platform) {
-    return require('electron/package.json').version.split('+')[0] ?? ''
+    const lock = JSON.parse(readFileSync(join(REPOSITORY_ROOT, 'scripts', 'primary-runtime', 'lock.json'), 'utf8')) as { nodeVersion?: string }
+    if (lock.nodeVersion === undefined) throw new Error('desktop runtime: primary-runtime lock has no Node version for the cross-build')
+    return lock.nodeVersion
   }
   return execFileSync(executable, ['-p', 'process.versions.node'], {
     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
