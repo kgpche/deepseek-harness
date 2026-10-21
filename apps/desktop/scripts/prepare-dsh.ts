@@ -86,7 +86,13 @@ function runPnpm(args: readonly string[]): Promise<void> {
     const config = join(PNPM_BUILD_STATE, 'config')
     const userConfig = join(config, 'npmrc')
     mkdirSync(config, { recursive: true })
-    writeFileSync(userConfig, '')
+    // A cross-build installs the TARGET platform's optional engines: pnpm
+    // picks optional dependencies by the host's os/cpu unless told the target's.
+    if (TARGET_PLATFORM !== process.platform) {
+      writeFileSync(userConfig, `supported-architectures.os[]=${TARGET_PLATFORM}\n`)
+    } else {
+      writeFileSync(userConfig, '')
+    }
     const child = spawn(NODE, [
       '--expose-internals',
       PNPM,
