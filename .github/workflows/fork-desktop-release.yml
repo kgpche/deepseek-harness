@@ -75,7 +75,7 @@ jobs:
         working-directory: apps/desktop
         run: |
           mkdir -p "${{ runner.temp }}/installers"
-          find .desktop-build/targets/${{ matrix.target }} -type f \( -name '*.deb' -o -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' \) \
+          find .desktop-build/targets/${{ matrix.target }} -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' \) \
             -exec cp {} "${{ runner.temp }}/installers/" \;
           ls -lh "${{ runner.temp }}/installers"
       - uses: actions/upload-artifact@v7.0.1
@@ -95,12 +95,70 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # The fork account's macOS runners never provision, so cross-build the mac
+  # targets from Linux instead: unsigned mode skips the keychain and
+  # notarization, and app-builder assembles the DMG without macOS tools. If
+  # this leg fails the release still ships what succeeded.
+  mac-cross:
+    name: ${{ matrix.target }} (from Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [mac-arm64, mac-x64]
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5.0.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build artifacts and the web client
+        run: |
+          pnpm run build:artifacts
+          pnpm run build:web
+      - name: Cross-package the unsigned mac installer
+        working-directory: apps/desktop
+        run: pnpm run package -- ${{ matrix.target }} --unsigned
+      - name: Collect installers
+        if: success()
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          mkdir -p "${{ runner.temp }}/installers"
+          find .desktop-build/targets/${{ matrix.target }} -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' \) \
+            -exec cp {} "${{ runner.temp }}/installers/" \;
+          ls -lh "${{ runner.temp }}/installers"
+      - uses: actions/upload-artifact@v7.0.1
+        if: success()
+        with:
+          name: installer-${{ matrix.target }}
+          path: ${{ runner.temp }}/installers/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: logs-${{ matrix.target }}-cross-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: apps/desktop/.desktop-build/packaging-runs/
+          if-no-files-found: warn
+          retention-days: 7
+
   # The fork account's macOS runners never provision (jobs sit assigned and
   # get cancelled without a step); the release still publishes whatever
   # installers succeeded, so Linux and Windows ship without macOS.
   release:
-    needs: package
-    if: ${{ !cancelled() && needs.package.result != 'skipped' }}
+    needs: [package, mac-cross]
+    if: ${{ !cancelled() && (needs.package.result == 'success' || needs.mac-cross.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
