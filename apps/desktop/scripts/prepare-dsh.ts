@@ -86,17 +86,6 @@ function runPnpm(args: readonly string[]): Promise<void> {
     const config = join(PNPM_BUILD_STATE, 'config')
     const userConfig = join(config, 'npmrc')
     mkdirSync(config, { recursive: true })
-    // A cross-build installs the TARGET platform's optional engines: pnpm
-    // picks optional dependencies by the host's os/cpu unless told the target's.
-    // pnpm reads supported-architectures only from a project .npmrc — the
-    // workspace file the runtime build root already owns.
-    if (TARGET_PLATFORM !== process.platform) {
-      const runtimeArch = desktopTargetPlatform(resolveDesktopBuildTarget()).arch
-      const projectNpmrc = join(BUILD_ROOT, '.npmrc')
-      const existing = existsSync(projectNpmrc) ? readFileSync(projectNpmrc, 'utf8') : ''
-      const additions = `supported-architectures.os[]=${TARGET_PLATFORM}\nsupported-architectures.cpu[]=${runtimeArch === 'arm64' ? 'arm64' : 'x64'}\n`
-      writeFileSync(projectNpmrc, existing + additions)
-    }
     writeFileSync(userConfig, '')
     const child = spawn(NODE, [
       '--expose-internals',
@@ -143,7 +132,8 @@ async function main(): Promise<void> {
     const patches = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:stage-packages', async () => {
       copyFileSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGE_SET_FILE), join(BUILD_ROOT, DESKTOP_PACKAGE_SET_FILE))
       cpSync(join(PACKAGE_SET_ROOT, DESKTOP_PACKAGES_DIR), join(BUILD_ROOT, DESKTOP_PACKAGES_DIR), { recursive: true })
-      createRuntimeProjectMetadata(BUILD_ROOT, release)
+      createRuntimeProjectMetadata(BUILD_ROOT, release, TARGET_PLATFORM === process.platform ? undefined
+        : { os: TARGET_PLATFORM, cpu: desktopTargetPlatform(resolveDesktopBuildTarget()).arch })
       return prepareRuntimePatches(BUILD_ROOT, resolve(APP_ROOT, '..', '..'))
     })
     await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:lockfile', () => runPnpm(['install', '--lockfile-only']))

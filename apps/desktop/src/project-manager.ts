@@ -131,7 +131,9 @@ export class DesktopProjectManager {
 }
 
 /** Create build-only project metadata for materializing the signed runtime. */
-export function createRuntimeProjectMetadata(projectDir: string, release: DesktopRelease): void {
+export function createRuntimeProjectMetadata(
+  projectDir: string, release: DesktopRelease, supportedArchitectures?: { os: NodeJS.Platform; cpu: 'arm64' | 'x64' },
+): void {
   mkdirSync(projectDir, { recursive: true, mode: 0o700 })
   const packageSet = verifyDesktopCorePackageSet(projectDir, release.version)
   const manifest = {
@@ -147,6 +149,14 @@ export function createRuntimeProjectMetadata(projectDir: string, release: Deskto
     workspaceFile(desktopCorePackageOverrides(packageSet)),
     { mode: 0o600 },
   )
+  // A cross-build resolves optional engines for the TARGET platform; pnpm
+  // honors supported-architectures from the runtime project's pnpm section.
+  if (supportedArchitectures !== undefined) {
+    writeJson(join(projectDir, 'package.json'), {
+      ...manifest,
+      pnpm: { supportedArchitectures: { os: [supportedArchitectures.os], cpu: [supportedArchitectures.cpu] } },
+    })
+  }
 }
 
 /**

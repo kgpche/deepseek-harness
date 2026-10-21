@@ -195,8 +195,16 @@ export function resolveDesktopPackageTarget(
   if (target.platform === 'linux' && (hostPlatform !== 'linux' || hostArch !== 'x64')) {
     throw new Error('desktop package: linux-x64 requires a Linux x64 build host')
   }
-  if (target.platform === 'darwin' && hostPlatform !== 'darwin' && process.env.DSH_DESKTOP_MAC_CROSS !== '1') {
-    throw new Error(`desktop package: ${name} requires a macOS build host (set DSH_DESKTOP_MAC_CROSS=1 to cross-build unsigned from Linux)`)
+  if (target.platform === 'darwin') {
+    if (hostPlatform !== 'darwin' && process.env.DSH_DESKTOP_MAC_CROSS !== '1') {
+      throw new Error(`desktop package: ${name} requires a macOS build host (set DSH_DESKTOP_MAC_CROSS=1 to cross-build unsigned from Linux)`)
+    }
+    if (hostPlatform === 'darwin' && name === 'mac-arm64' && hostArch !== 'arm64') {
+      throw new Error('desktop package: mac-arm64 requires an Apple Silicon build host')
+    }
+    if (hostPlatform === 'darwin' && name === 'mac-x64' && hostArch !== 'arm64' && hostArch !== 'x64') {
+      throw new Error('desktop package: mac-x64 requires an Intel Mac or Apple Silicon with Rosetta')
+    }
   }
   return target
 }

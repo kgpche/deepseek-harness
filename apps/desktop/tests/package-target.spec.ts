@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   desktopElectronBuilderArguments,
   desktopElectronBuilderEnvironment,
@@ -34,7 +34,13 @@ describe('desktop package target', () => {
     expect(() => resolveDesktopPackageTarget('linux-x64', 'linux', 'arm64')).toThrow(/Linux x64/u)
     expect(() => resolveDesktopPackageTarget('win-x64', 'darwin', 'arm64')).toThrow(/Windows x64/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'darwin', 'x64')).toThrow(/Apple Silicon/u)
+    // The cross-build escape hatch only opens with the env flag set.
+    vi.unstubAllEnvs()
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'linux', 'arm64')).toThrow(/macOS/u)
+    vi.stubEnv('DSH_DESKTOP_MAC_CROSS', '1')
+    expect(resolveDesktopPackageTarget('mac-arm64', 'linux', 'arm64').name).toBe('mac-arm64')
+    expect(resolveDesktopPackageTarget('mac-x64', 'linux', 'x64').name).toBe('mac-x64')
+    vi.unstubAllEnvs()
     expect(() => resolveDesktopPackageTarget('mac-x64', 'darwin', 'ppc64')).toThrow(/Rosetta/u)
   })
 

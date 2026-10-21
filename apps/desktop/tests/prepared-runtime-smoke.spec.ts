@@ -37,7 +37,15 @@ it('retains payload progress and termination details when the child fails', asyn
   payload.mockRejectedValueOnce(failure)
   const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
   const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-  await expect(smokePreparedRuntime(root, join(root, 'electron'), join(root, 'runtime'), descriptor)).rejects.toBe(failure)
+  // win32 fixture on a linux host skips the foreign payload; force the
+  // same-platform path so the failure plumbing still runs.
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { ...platform, value: 'win32' })
+  try {
+    await expect(smokePreparedRuntime(root, join(root, 'electron'), join(root, 'runtime'), descriptor)).rejects.toBe(failure)
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
+  }
   expect(stdout).toHaveBeenCalledWith('payload output\n')
   expect(stderr).toHaveBeenCalledWith('runtime payload: pty\n')
   expect(stderr).toHaveBeenCalledWith('runtime payload: killed=true, signal=SIGTERM\n')
@@ -56,7 +64,21 @@ it('smokes an x64 target verified on an arm64 build host without revalidating ag
   const descriptor = await verifyDesktopRuntime(root, fixture.release.version, target)
   const electron = join(root, 'target-electron')
   const resources = join(root, 'runtime')
+  // The darwin target on this (linux) host is a cross payload: the smoke
+  // skips, so mirror that and run the payload through the same-platform
+  // assertion below by pretending the host matches.
   await smokePreparedRuntime(root, electron, resources, descriptor)
+  expect(payload.mock.calls.length).toBe(0)
+  expect(smokeDesktopRuntime).not.toHaveBeenCalled()
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' })
+  Object.defineProperty(process, 'arch', { ...hostArch, value: 'x64' })
+  try {
+    await smokePreparedRuntime(root, electron, resources, descriptor)
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
+    Object.defineProperty(process, 'arch', hostArch)
+  }
   expect(payload.mock.calls[0]![0]).toBe(electron)
   expect(payload.mock.calls[0]![1]).toEqual(expect.arrayContaining([root, resources]))
   expect(smokeDesktopRuntime).toHaveBeenCalledWith(root, electron, descriptor, expect.any(Object), resources)

@@ -837,7 +837,10 @@ describe('desktop main startup', () => {
         { role: 'toggleDevTools', visible: false, accelerator: 'F12' },
       ])
     } else {
-      expect(window.options).not.toHaveProperty('titleBarStyle')
+      // The fork hides the Linux native title bar; the client draws its own
+      // traffic lights over the sidebar's empty top band.
+      expect(window.options).toMatchObject({ titleBarStyle: 'hidden' })
+      expect(window.options).not.toHaveProperty('titleBarOverlay')
       expect(window.options).not.toHaveProperty('vibrancy')
     }
     expect(harness.hosts).toHaveLength(0)

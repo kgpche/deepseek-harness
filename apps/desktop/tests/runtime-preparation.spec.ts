@@ -90,10 +90,14 @@ it.each(['mac-arm64', 'mac-x64', 'win-x64', 'linux-x64'] as const)('prepares %s 
   expect(readFileSync(join(runtime, 'cli', 'command-manager.js'), 'utf8')).toBe('command manager fixture')
   expect(existsSync(join(runtime, 'cli', 'command-path.ps1'))).toBe(true)
   expect(JSON.parse(readFileSync(join(runtime, 'versions.json'), 'utf8'))).toEqual({
-    schemaVersion: 1, node: '24.18.1', pnpm: '11.7.0',
+    schemaVersion: 1,
+    // Same-host targets probe the extracted Electron (the execFileSync mock);
+    // a cross target cannot run it and reads the primary-runtime lock instead.
+    node: target === 'linux-x64' ? '24.18.1' : '24.21.0',
+    pnpm: '11.7.0',
   })
   expect(state.preparePrimary).toHaveBeenCalledWith({ deferSmoke: windows })
-  if (mac) expect(state.commandLink).toHaveBeenCalledWith(join(runtime, 'cli'), target === 'mac-arm64' ? 'arm64' : 'x64', '12.0')
+  if (mac) expect(state.commandLink).toHaveBeenCalledWith(join(runtime, 'cli'), target === 'mac-arm64' ? 'arm64' : 'x64', process.platform === 'darwin' ? '12.0' : '10.15.0')
   else expect(state.commandLink).not.toHaveBeenCalled()
 })
 
