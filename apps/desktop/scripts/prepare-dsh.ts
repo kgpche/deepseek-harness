@@ -43,10 +43,17 @@ const STORE_ROOT = join(BUILD_ROOT, 'store')
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 const PNPM_BUILD_STATE = BUILD_PATHS.dshPnpm
 const PACKAGE_SET_ROOT = BUILD_PATHS.packageSet
-// Windows and Linux distributions extract the binary at the archive root; macOS nests it in an app bundle.
-const ELECTRON = join(BUILD_PATHS.electron, process.platform === 'win32' ? 'electron.exe' : process.platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron')
+// The payload's Electron distribution, by TARGET platform (a cross-build
+// prepares a foreign one); Windows and Linux extract the binary at the archive
+// root, macOS nests it in an app bundle.
+const TARGET_PLATFORM = desktopTargetPlatform(resolveDesktopBuildTarget()).platform
+const ELECTRON = join(BUILD_PATHS.electron, TARGET_PLATFORM === 'win32' ? 'electron.exe' : TARGET_PLATFORM === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron')
 // Linux runs every step under the standalone Node; see desktopHostNodeExecutable.
-const NODE = desktopHostNodeExecutable(ELECTRON, BUILD_PATHS.runtime)
+// A cross-build cannot run the foreign binary at all — the build host's own
+// process executable stands in, and only for build-time pnpm work.
+const NODE = TARGET_PLATFORM === process.platform
+  ? desktopHostNodeExecutable(ELECTRON, BUILD_PATHS.runtime)
+  : process.execPath
 const PNPM = join(RUNTIME_ROOT, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
 
 function manifestVersion(path: string, subject: string): string {
