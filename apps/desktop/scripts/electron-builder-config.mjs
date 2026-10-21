@@ -187,6 +187,9 @@ export function createElectronBuilderConfig(
       format: 'ULMO',
       sign: !unsigned,
       writeUpdateInfo: false,
+      // A solid color avoids the DMG background-image pipeline, whose sips
+      // and tiffutil steps exist only on macOS hosts.
+      backgroundColor: '#f5f5f7',
     },
     beforePack: async context => {
       const office = await officePackageDirectories(buildPaths.dsh, { platform: resolvedPlatform, arch: resolvedArch })
