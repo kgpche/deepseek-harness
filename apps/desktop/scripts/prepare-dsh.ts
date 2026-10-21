@@ -89,7 +89,12 @@ function runPnpm(args: readonly string[]): Promise<void> {
     // A cross-build installs the TARGET platform's optional engines: pnpm
     // picks optional dependencies by the host's os/cpu unless told the target's.
     if (TARGET_PLATFORM !== process.platform) {
-      writeFileSync(userConfig, `supported-architectures.os[]=${TARGET_PLATFORM}\n`)
+      const configLines = [`supported-architectures.os[]=${TARGET_PLATFORM}`]
+      // pnpm resolves supported-architectures from ONE place; the runtime
+      // package.json is authoritative for os and cpu together.
+      const runtimeArch = desktopTargetPlatform(resolveDesktopBuildTarget()).arch
+      configLines.push(`supported-architectures.cpu[]=${runtimeArch === 'arm64' ? 'arm64' : 'x64'}`)
+      writeFileSync(userConfig, `${configLines.join('\n')}\n`)
     } else {
       writeFileSync(userConfig, '')
     }
