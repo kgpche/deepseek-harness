@@ -169,7 +169,7 @@ jobs:
           tag="$REQUESTED_TAG"
           if [ -z "$tag" ]; then tag="fork-$(node -p "require('./package.json').version")"; fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v7.0.1
+      - uses: actions/download-artifact@v6.0.0
         with:
           pattern: installer-*
           merge-multiple: true
