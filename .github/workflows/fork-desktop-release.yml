@@ -110,6 +110,7 @@ jobs:
     env:
       DSH_TELEMETRY_DISABLED: '1'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      DSH_DESKTOP_MAC_CROSS: '1'
     steps:
       - uses: actions/checkout@v7.0.1
         with:
