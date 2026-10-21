@@ -178,7 +178,7 @@ async function main(): Promise<void> {
     const descriptor = await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:verify-before-smoke', () => verifyDesktopRuntime(DSH_OUTPUT_ROOT, release.version, target))
     if (!process.argv.includes('--defer-runtime-smoke')) {
       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:smoke', () => smokePreparedRuntime(
-        DSH_OUTPUT_ROOT, TARGET_PLATFORM === process.platform ? NODE : process.execPath, RUNTIME_ROOT, descriptor,
+        DSH_OUTPUT_ROOT, NODE, RUNTIME_ROOT, descriptor,
       ))
       await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'runtime:verify-after-smoke', () => verifyDesktopRuntime(DSH_OUTPUT_ROOT, release.version, target))
     }
