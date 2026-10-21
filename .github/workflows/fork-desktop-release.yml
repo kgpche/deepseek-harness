@@ -35,11 +35,6 @@ jobs:
         include:
           - { os: ubuntu-latest, target: linux-x64 }
           - { os: windows-latest, target: win-x64 }
-          # macos-13 (Intel): the fork account's macOS arm64 runners never
-          # provision — jobs sit assigned for ~17 minutes and get cancelled
-          # without a single step. Both mac targets cross-build fine from x64.
-          - { os: macos-13, target: mac-arm64 }
-          - { os: macos-13, target: mac-x64 }
     env:
       DSH_TELEMETRY_DISABLED: '1'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
