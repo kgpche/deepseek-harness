@@ -181,7 +181,9 @@ export function createElectronBuilderConfig(
       // Prepared runtime files retain their signatures; PAK resources are sealed by their enclosing bundle.
       signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
       notarize: !unsigned && !skipNotarization,
-      target: unsigned ? ['dmg'] : ['dmg', 'zip'],
+      // The DMG builder ships only an x86_64 macOS python; a Linux cross-build
+      // cannot run it, so the unsigned cross-build emits a zip instead.
+      target: process.env.DSH_DESKTOP_MAC_CROSS === '1' ? ['zip'] : unsigned ? ['dmg'] : ['dmg', 'zip'],
     },
     dmg: {
       format: 'ULMO',
