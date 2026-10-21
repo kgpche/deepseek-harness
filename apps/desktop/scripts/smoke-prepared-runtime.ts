@@ -24,6 +24,7 @@ export async function smokePreparedRuntime(
 ): Promise<void> {
   const cache = await mkdtemp(join(tmpdir(), 'desktop-native-smoke-'))
   const environment = { ...scrubWindowsSigningEnvironment(process.env), NODE_OPTIONS: '',
+    ...(process.env.DSH_DESKTOP_MAC_CROSS === '1' ? { DSH_DESKTOP_MAC_CROSS: '1' } : {}),
     NARB_NATIVE_CACHE_DIR: cache, NARB_DISABLE_NATIVE_CACHE: '0' }
   try {
     const archive = runtimeArchivePath(root)

@@ -14,10 +14,12 @@ import { delimiter, join } from 'node:path'
  */
 export async function checkPnpm(resourcesRuntime) {
   // Linux drives the bundled standalone Node; every other platform drives Electron in Node mode.
-  if (process.platform === 'linux') {
+  // A cross-build (DSH_DESKTOP_MAC_CROSS) runs the payload checks under the
+  // build host's Node, which this identity assertion cannot see.
+  if (process.platform === 'linux' && process.env.DSH_DESKTOP_MAC_CROSS !== '1') {
     assert.equal(process.execPath, join(resourcesRuntime, 'primary-runtime', 'dependencies', 'node', 'bin', 'node'),
       'Run the package-manager smoke with the bundled standalone Node')
-  } else {
+  } else if (process.platform === 'darwin') {
     assert.ok(process.versions.electron, 'Run the package-manager smoke with Electron Node mode')
   }
   assert.equal(existsSync(join(resourcesRuntime, 'pnpm')), false, 'Desktop must ship only primary-runtime pnpm')
