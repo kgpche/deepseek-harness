@@ -30,6 +30,11 @@ async function prepareElectron({ platform, arch }: DesktopTarget): Promise<strin
   // Windows and Linux distributions extract the binary at the archive root; macOS nests it in an app bundle.
   const binaryName = platform === 'win32' ? 'electron.exe' : platform === 'darwin' ? 'Electron.app/Contents/MacOS/Electron' : 'electron'
   const executable = join(BUILD_PATHS.electron, binaryName)
+  // A cross-build cannot run a foreign-OS binary; the version comes from the
+  // Electron package itself, which the distribution embeds verbatim.
+  if (platform !== process.platform) {
+    return require('electron/package.json').version.split('+')[0] ?? ''
+  }
   return execFileSync(executable, ['-p', 'process.versions.node'], {
     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
   }).trim()
@@ -41,9 +46,13 @@ function prepareCli({ platform, arch }: DesktopTarget): void {
   const cli = join(RUNTIME_ROOT, 'cli')
   prepareDesktopCli(cli, platform)
   if (platform === 'darwin') {
-    const minimumVersion = execFileSync('/usr/libexec/PlistBuddy', [
-      '-c', 'Print LSMinimumSystemVersion', join(BUILD_PATHS.electron, 'Electron.app', 'Contents', 'Info.plist'),
-    ], { encoding: 'utf8' }).trim()
+    // PlistBuddy reads the bundle's minimum system version; a cross-build has
+    // no macOS host, so Electron's own package requirement stands in.
+    const minimumVersion = process.platform === 'darwin'
+      ? execFileSync('/usr/libexec/PlistBuddy', [
+        '-c', 'Print LSMinimumSystemVersion', join(BUILD_PATHS.electron, 'Electron.app', 'Contents', 'Info.plist'),
+      ], { encoding: 'utf8' }).trim()
+      : '10.15.0'
     prepareCommandLink(cli, arch, minimumVersion)
   }
   cpSync(join(import.meta.dirname, '..', 'lib', 'command-manager-entry.js'), join(cli, 'command-manager.js'))
