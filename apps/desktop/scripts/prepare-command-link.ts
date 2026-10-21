@@ -11,8 +11,14 @@ import { join } from 'node:path'
  * @param minimumVersion - Minimum macOS version declared by Electron.
  */
 export function prepareCommandLink(destination: string, arch: 'arm64' | 'x64', minimumVersion: string): void {
-  if (process.platform !== 'darwin' || !/^\d+\.\d+(?:\.\d+)?$/u.test(minimumVersion)) {
-    throw new Error('desktop command link: a macOS host and Electron minimum version are required')
+  if (!/^\d+\.\d+(?:\.\d+)?$/u.test(minimumVersion)) {
+    throw new Error('desktop command link: Electron minimum version is required')
+  }
+  if (process.platform !== 'darwin') {
+    // A cross-build cannot compile the helper with macOS clang; the installed
+    // app links commands through its bundle binary instead of the helper.
+    mkdirSync(destination, { recursive: true })
+    return
   }
   mkdirSync(destination, { recursive: true })
   execFileSync('clang', ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
