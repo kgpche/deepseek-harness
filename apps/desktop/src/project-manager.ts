@@ -31,21 +31,27 @@ const DSH_PACKAGE = '@deepseek-ai/dsh'
 const CORE_BUILD_PACKAGE = '@deepseek-ai/dsh-subprocess-local'
 const WEB_PROFILE = PROFILE_TEMPLATES.web as ProfileTemplate
 const WORKSPACE_SETTINGS = 'nodeLinker: hoisted\nautoInstallPeers: false\n'
+
+/** The workspace settings a cross-build adds so pnpm resolves the target's optional engines. */
+function crossArchitectureSettings(architectures: { os: NodeJS.Platform; cpu: 'arm64' | 'x64' }): string {
+  return `supportedArchitectures:\n  os:\n    - ${architectures.os}\n  cpu:\n    - ${architectures.cpu}\n`
+}
 function writeJson(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, undefined, 2)}\n`, { mode: 0o600 })
 }
 
-function workspaceFile(overrides: Readonly<Record<string, string>> = {}): string {
+function workspaceFile(overrides: Readonly<Record<string, string>> = {}, supportedArchitectures?: { os: NodeJS.Platform; cpu: 'arm64' | 'x64' }): string {
   const entries = Object.entries(overrides).sort(([left], [right]) => left.localeCompare(right))
   const overrideSection = entries.length === 0
     ? ''
     : `overrides:\n${entries.map(([name, spec]) => `  ${JSON.stringify(name)}: ${JSON.stringify(spec)}`).join('\n')}\n`
-  if (entries.length === 0) return `packages:\n  - .\n\n${WORKSPACE_SETTINGS}`
+  const cross = supportedArchitectures === undefined ? '' : crossArchitectureSettings(supportedArchitectures)
+  if (entries.length === 0) return `packages:\n  - .\n\n${WORKSPACE_SETTINGS}${cross}`
   const coreBuildSpec = overrides[CORE_BUILD_PACKAGE]
   const coreBuildKey = coreBuildSpec === undefined
     ? CORE_BUILD_PACKAGE
     : `${CORE_BUILD_PACKAGE}@${coreBuildSpec.replace('file:./', 'file:')}`
-  return `packages:\n  - .\n\n${overrideSection}${WORKSPACE_SETTINGS}allowBuilds:\n  node-pty: true\n  koffi: true\n  fs-ext: true\n  ${JSON.stringify(coreBuildKey)}: true\n  '@google/genai': false\n  protobufjs: false\n  node-addon-require-builtin: false\n`
+  return `packages:\n  - .\n\n${overrideSection}${WORKSPACE_SETTINGS}${cross}allowBuilds:\n  node-pty: true\n  koffi: true\n  fs-ext: true\n  ${JSON.stringify(coreBuildKey)}: true\n  '@google/genai': false\n  protobufjs: false\n  node-addon-require-builtin: false\n`
 }
 
 function migrateProfileSettings(projectDir: string): void {
@@ -146,17 +152,11 @@ export function createRuntimeProjectMetadata(
   writeJson(join(projectDir, 'package.json'), manifest)
   writeFileSync(
     join(projectDir, 'pnpm-workspace.yaml'),
-    workspaceFile(desktopCorePackageOverrides(packageSet)),
+    // A cross-build resolves optional engines for the TARGET platform; pnpm
+    // v11 reads supportedArchitectures only from the workspace file.
+    workspaceFile(desktopCorePackageOverrides(packageSet), supportedArchitectures),
     { mode: 0o600 },
   )
-  // A cross-build resolves optional engines for the TARGET platform; pnpm
-  // honors supported-architectures from the runtime project's pnpm section.
-  if (supportedArchitectures !== undefined) {
-    writeJson(join(projectDir, 'package.json'), {
-      ...manifest,
-      pnpm: { supportedArchitectures: { os: [supportedArchitectures.os], cpu: [supportedArchitectures.cpu] } },
-    })
-  }
 }
 
 /**
