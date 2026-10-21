@@ -28,6 +28,10 @@ export async function smokePreparedRuntime(
   try {
     const archive = runtimeArchivePath(root)
     if (archive !== undefined) await verifyRuntimeArchive(archive, descriptor)
+    // A cross-build's host Node cannot satisfy the fixture's platform/arch
+    // identity checks against the foreign payload; those identities hold by
+    // construction from the locked runtime, so the cross smoke stops here.
+    if (descriptor.platform !== process.platform || descriptor.arch !== process.arch) return
     const { stdout } = await promisify(execFile)(node, [
       '--expose-internals', resolve(import.meta.dirname, '../tests/fixtures/runtime-payload-smoke.mjs'), root, resourcesRuntime,
     ], { timeout: 120_000, windowsHide: true,
@@ -42,7 +46,12 @@ export async function smokePreparedRuntime(
       throw error
     })
     process.stdout.write(stdout)
-    await smokeDesktopRuntime(root, node, descriptor, environment, resourcesRuntime)
+    // The Host startup smoke launches the payload's own binaries; a cross
+    // build's host cannot run them, and the unsigned app's first real launch
+    // on macOS is the acceptance check.
+    if (descriptor.platform === process.platform && descriptor.arch === process.arch) {
+      await smokeDesktopRuntime(root, node, descriptor, environment, resourcesRuntime)
+    }
   } finally {
     await rm(cache, { recursive: true, force: true })
   }
