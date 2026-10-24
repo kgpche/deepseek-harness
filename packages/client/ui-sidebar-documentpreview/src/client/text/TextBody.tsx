@@ -56,7 +56,7 @@ export function TextBody({ content, find, useTabInfo }: DocumentPreviewProps): R
             return (
               <div
                 key={number}
-                className={clsx(css.line, number === target && css.lineTarget, current && css.findLine)}
+                className={clsx(css.line, current && css.findLine)}
                 data-textpreview-line={number}
                 {...number === target ? { 'data-textpreview-target': number } : {}}
                 {...current ? { 'data-textpreview-find-current': number } : {}}

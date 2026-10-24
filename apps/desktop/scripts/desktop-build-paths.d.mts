@@ -1,4 +1,4 @@
-/** Mutable target directories plus the shared immutable download cache. */
+/** Mutable target directories plus shared download and package caches. */
 export interface DesktopTargetBuildPaths {
   readonly root: string
   readonly artifacts: string
@@ -13,6 +13,7 @@ export interface DesktopTargetBuildPaths {
   readonly packedVendor: string
   readonly packedLandlock: string
   readonly downloads: string
+  readonly pnpmStore: string
 }
 
 /**
@@ -37,9 +38,10 @@ export function resolveDesktopBuildTarget(
 /**
  * Return the mutable preparation and artifact directories owned by one release target.
  * @param target - Supported Desktop target name.
- * @returns Target paths plus the shared immutable download cache.
+ * @param environment - Packaging environment with an optional absolute cache directory.
+ * @returns Target paths plus shared download and package caches.
  */
-export function desktopTargetBuildPaths(target: DesktopBuildTarget): DesktopTargetBuildPaths
+export function desktopTargetBuildPaths(target: DesktopBuildTarget, environment?: NodeJS.ProcessEnv): DesktopTargetBuildPaths
 
 /**
  * Return the platform and architecture of the payload one release target prepares.

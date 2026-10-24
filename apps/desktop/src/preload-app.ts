@@ -9,6 +9,7 @@ import { syncNativeTheme } from './preload-theme.ts'
 import { syncWindowsAppearance } from './preload-windows.ts'
 import { installMandatoryUpdateOverlay } from './preload-mandatory-overlay.ts'
 import { createDesktopBrowserBridge } from './preload-browser.ts'
+import type { FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 
 function createProductApi(): DshDesktopProductApi {
   return {
@@ -18,6 +19,17 @@ function createProductApi(): DshDesktopProductApi {
       minimize: () => ipcRenderer.invoke(DESKTOP_IPC.windowMinimize) as Promise<void>,
       toggleMaximize: () => ipcRenderer.invoke(DESKTOP_IPC.windowToggleMaximize) as Promise<void>,
       close: () => ipcRenderer.invoke(DESKTOP_IPC.windowClose) as Promise<void>,
+    },
+    fileDrag: {
+      prepare: (source, requestId) => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source, requestId) as
+        Promise<FileDragHandle | undefined>,
+      cancel: (requestId) => { void ipcRenderer.invoke(DESKTOP_IPC.fileDragCancel, requestId).catch((_error: unknown) => {
+        // Main-process shutdown cancels any remaining preparations.
+      }) },
+      start: handle => ipcRenderer.invoke(DESKTOP_IPC.fileDragStart, handle) as Promise<boolean>,
+      release: (handle) => { void ipcRenderer.invoke(DESKTOP_IPC.fileDragRelease, handle).catch((_error: unknown) => {
+        // Main-process shutdown also releases every prepared file.
+      }) },
     },
     deviceInfo: () => ipcRenderer.invoke(DESKTOP_IPC.deviceInfo) as Promise<string>,
     keyboard: {

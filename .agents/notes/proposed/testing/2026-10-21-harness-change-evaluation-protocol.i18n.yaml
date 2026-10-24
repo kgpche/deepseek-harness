@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-21-harness-change-evaluation-protocol.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/testing/2026-10-21-harness-change-evaluation-protocol.md
+/agent-note-controlled-evaluation-for-harness-changes:
+  en: db080061fb9821f1
+  zh: 71acb34b0d1fb324
+/agent-note-controlled-evaluation-for-harness-changes/problem:
+  en: fb8bfd6bde41dad4
+  zh: 4f3d3b26b5d4aa95
+/agent-note-controlled-evaluation-for-harness-changes/proposal:
+  en: aa1c3ba83ae7d769
+  zh: ede1e0bb02e3f33e
+/agent-note-controlled-evaluation-for-harness-changes/probe-contract:
+  en: 8f0c567649d2fecd
+  zh: e6a0d077de181758
+/agent-note-controlled-evaluation-for-harness-changes/integration-options:
+  en: 839c48381183a65a
+  zh: 2be7a77a8e2d4246
+/agent-note-controlled-evaluation-for-harness-changes/alternatives-considered:
+  en: 96fe87ed81742751
+  zh: a35afd858b630e8f
+/agent-note-controlled-evaluation-for-harness-changes/acceptance-criteria:
+  en: 03a1798f09c2c626
+  zh: 584511d54dd06f34
+/agent-note-controlled-evaluation-for-harness-changes/risks:
+  en: 9156b5a815764ee5
+  zh: 3a865c18e8a6b8de
