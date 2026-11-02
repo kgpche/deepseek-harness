@@ -142,6 +142,7 @@ export function createElectronBuilderConfig(
     // so its dsh payload ships as physical resources instead of application archive members.
     files: [
       'lib/main.js',
+      'lib/operation-report-worker.js',
       'lib/welcome/**/*',
       'lib/preload-app.cjs',
       'lib/preload-mandatory.cjs',

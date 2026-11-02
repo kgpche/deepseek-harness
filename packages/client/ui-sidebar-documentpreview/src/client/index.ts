@@ -1,3 +1,4 @@
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
  * Browser half: register `text` as a right-Sidebar tab type.
  *
@@ -115,7 +116,9 @@ export function apply(ctx: ClientContext): void {
         'sidebar.right.tab.document.action': { kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: documentTabInfoFactory } } },
       },
       inject: (sessionId, actions): TextPreviewInjected => ({
-        ...face(sessionId, actions), hooks: { documentPreviews: source }, findRequest,
+        ...face(sessionId, actions),
+        hooks: { documentPreviews: source },
+        findRequest,
       }),
     },
     TextPreview,
