@@ -39,12 +39,20 @@ describe('web shell base.css', () => {
     expect(baseCss).not.toContain(THEME_PACKAGE)
   })
 
-  it('declares exactly the interactive subtraction the drag contract publishes', () => {
+  it('resets inherited regions on elements while preserving pseudo-element regions', () => {
+    expect(normalizedCss).toContain(
+      ":where(html:is([data-platform='darwin'], [data-platform='linux']) *) { -webkit-app-region: initial; }",
+    )
+    expect(normalizedCss).not.toMatch(/[^{}]*::[^{}]*\{[^{}]*app-region:\s*initial\b/)
+  })
+
+  it('limits interactive subtraction to controls inside marked chrome rows', () => {
     // One source for the selector: the model constant. The darwin rule must
     // declare the same list, so a new interactive role is added in one place
     // and a drift between the sheet and the composition model fails here.
-    const framelessRule = /html:is\(\[data-platform='darwin'\], \[data-platform='linux'\]\) :is\(([^)]*)\)/
-    const rule = new RegExp(framelessRule.source + /\s*\{[^}]*app-region:\s*no-drag/.source).exec(normalizedCss)
+    const scope = "html:is([data-platform='darwin'], [data-platform='linux']) :where([data-window-drag], [data-window-drag-controls])"
+    const rule = /:is\(([^)]*)\):where\(:not\(\[data-window-drag-exclude\] \*\)\)\s*\{[^}]*app-region:\s*no-drag/
+      .exec(normalizedCss.split(scope)[1] ?? '')
     expect(rule, 'base.css declares no frameless interactive no-drag rule').not.toBeNull()
     const declared = rule![1]!.split(',').map(part => part.trim()).join(', ')
     expect(declared).toBe(INTERACTIVE_SELECTOR)

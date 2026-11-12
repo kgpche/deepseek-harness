@@ -37,7 +37,14 @@ async function fixture() {
   await ctx.plugin({
     inject: ['fs', 'sandboxPolicy'],
     apply: (scope) => {
-      new WorkspaceFiles(scope, { maxBytes: 1024, maxFileBytes: 1024, maxLines: 100, maxEntries: 100, maxFindResults: 100 })
+      new WorkspaceFiles(scope, {
+        maxBytes: 1024,
+        maxFileBytes: 1024,
+        maxLines: 100,
+        maxEntries: 100,
+        maxFindResults: 100,
+        search: { maxResults: 100, maxEntries: 1000, graceMs: 3000, timeoutMs: 30000, stderrMaxBytes: 65536 },
+      })
     },
   })
   const resolveAgent = vi.fn<Context['sessionController']['resolveAgent']>(() => { throw new Error('Agent activation is unavailable') })
